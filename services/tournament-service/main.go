@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"math/rand"
 	"net/http"
@@ -27,6 +28,7 @@ type Tournament struct {
 	Name           string         `gorm:"not null" json:"name"`
 	Type           TournamentType `gorm:"not null" json:"type"`
 	IsDouble       bool           `gorm:"default:false" json:"is_double"`
+	IsPublic       bool           `gorm:"default:false" json:"is_public"`
 	GroupCount     int            `gorm:"default:1" json:"group_count"`
 	TeamsPerGroup  int            `gorm:"default:0" json:"teams_per_group"`
 	PromoteCount   int            `gorm:"default:0" json:"promote_count"`
@@ -99,6 +101,47 @@ func corsMiddleware() gin.HandlerFunc {
 	}
 }
 
+func adminAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+			c.Abort()
+			return
+		}
+
+		authServiceURL := os.Getenv("AUTH_SERVICE_URL")
+		if authServiceURL == "" {
+			authServiceURL = "http://localhost:8081"
+		}
+
+		req, _ := http.NewRequest("GET", authServiceURL+"/verify", nil)
+		req.Header.Set("Authorization", authHeader)
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil || resp.StatusCode != http.StatusOK {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			c.Abort()
+			return
+		}
+
+		var verifyResp struct {
+			UserID  float64 `json:"user_id"`
+			IsAdmin bool    `json:"is_admin"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&verifyResp); err != nil || !verifyResp.IsAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+			c.Abort()
+			return
+		}
+
+		c.Set("user_id", uint(verifyResp.UserID))
+		c.Set("is_admin", true)
+		c.Next()
+	}
+}
+
 func authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -124,6 +167,16 @@ func authMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// Parse response to extract user info
+		var verifyResp struct {
+			UserID  float64 `json:"user_id"`
+			IsAdmin bool    `json:"is_admin"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&verifyResp); err == nil {
+			c.Set("user_id", uint(verifyResp.UserID))
+			c.Set("is_admin", verifyResp.IsAdmin)
+		}
+
 		c.Next()
 	}
 }
@@ -142,6 +195,7 @@ func main() {
 		authorized.GET("/tournaments/:id", getTournament)
 		authorized.PUT("/tournaments/:id", updateTournament)
 		authorized.DELETE("/tournaments/:id", deleteTournament)
+		authorized.PUT("/tournaments/:id/toggle-public", togglePublic)
 		authorized.POST("/tournaments/:id/teams", addTeam)
 		authorized.GET("/tournaments/:id/teams", listTeams)
 		authorized.PUT("/tournaments/:id/teams/:teamId", updateTeam)
@@ -149,6 +203,14 @@ func main() {
 		authorized.POST("/tournaments/:id/generate", generateTournament)
 		authorized.POST("/tournaments/:id/promote", promoteToKnockout)
 		authorized.GET("/tournaments/:id/standings", getStandings)
+	}
+	
+	// Admin endpoints
+	adminGroup := r.Group("/admin")
+	adminGroup.Use(adminAuthMiddleware())
+	{
+		adminGroup.GET("/tournaments", adminListAllTournaments)
+		adminGroup.DELETE("/tournaments/:id", adminDeleteTournament)
 	}
 
 	port := os.Getenv("PORT")
@@ -174,6 +236,9 @@ func createTournament(c *gin.Context) {
 		return
 	}
 
+	userID, _ := c.Get("user_id")
+	creatorID := userID.(uint)
+
 	tournament := Tournament{
 		ID:            uuid.New(),
 		Name:          input.Name,
@@ -182,7 +247,8 @@ func createTournament(c *gin.Context) {
 		GroupCount:    input.GroupCount,
 		TeamsPerGroup: input.TeamsPerGroup,
 		PromoteCount:  input.PromoteCount,
-		CreatorID:     1,
+		CreatorID:     creatorID,
+		IsPublic:      false,
 	}
 
 	if err := db.Create(&tournament).Error; err != nil {
@@ -195,6 +261,20 @@ func createTournament(c *gin.Context) {
 
 func updateTournament(c *gin.Context) {
 	id := c.Param("id")
+	userID, _ := c.Get("user_id")
+	isAdmin, _ := c.Get("is_admin")
+	
+	var tournament Tournament
+	if err := db.First(&tournament, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Tournament not found"})
+		return
+	}
+	
+	if tournament.CreatorID != userID.(uint) && !isAdmin.(bool) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only creator or admin can update this tournament"})
+		return
+	}
+	
 	var input struct {
 		Name          string `json:"name"`
 		IsDouble      bool   `json:"is_double"`
@@ -218,6 +298,20 @@ func updateTournament(c *gin.Context) {
 
 func deleteTournament(c *gin.Context) {
 	id := c.Param("id")
+	userID, _ := c.Get("user_id")
+	isAdmin, _ := c.Get("is_admin")
+	
+	var tournament Tournament
+	if err := db.First(&tournament, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Tournament not found"})
+		return
+	}
+	
+	if tournament.CreatorID != userID.(uint) && !isAdmin.(bool) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only creator or admin can delete this tournament"})
+		return
+	}
+	
 	db.Where("tournament_id = ?", id).Delete(&Match{})
 	db.Where("tournament_id = ?", id).Delete(&Team{})
 	
@@ -229,8 +323,10 @@ func deleteTournament(c *gin.Context) {
 }
 
 func listTournaments(c *gin.Context) {
+	userID, _ := c.Get("user_id")
 	var tournaments []Tournament
-	db.Find(&tournaments)
+	// Get user's tournaments or public tournaments
+	db.Where("creator_id = ? OR is_public = ?", userID.(uint), true).Find(&tournaments)
 	c.JSON(http.StatusOK, tournaments)
 }
 
@@ -244,6 +340,50 @@ func getTournament(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, tournament)
+}
+
+func togglePublic(c *gin.Context) {
+	id := c.Param("id")
+	userID, _ := c.Get("user_id")
+	isAdmin, _ := c.Get("is_admin")
+	
+	var tournament Tournament
+	if err := db.First(&tournament, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Tournament not found"})
+		return
+	}
+	
+	if tournament.CreatorID != userID.(uint) && !isAdmin.(bool) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only creator or admin can change visibility"})
+		return
+	}
+	
+	tournament.IsPublic = !tournament.IsPublic
+	if err := db.Save(&tournament).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update visibility"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"message": "Tournament visibility updated", "is_public": tournament.IsPublic})
+}
+
+func adminListAllTournaments(c *gin.Context) {
+	var tournaments []Tournament
+	db.Find(&tournaments)
+	c.JSON(http.StatusOK, tournaments)
+}
+
+func adminDeleteTournament(c *gin.Context) {
+	id := c.Param("id")
+	
+	db.Where("tournament_id = ?", id).Delete(&Match{})
+	db.Where("tournament_id = ?", id).Delete(&Team{})
+	
+	if err := db.Delete(&Tournament{}, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete tournament"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Tournament deleted by admin"})
 }
 
 func addTeam(c *gin.Context) {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, Navigate, useLocation, Outlet } from 'react-router-dom';
 import api from './api';
-import { Trophy, Users, Play, Plus, LogOut, Moon, Sun, Settings, Trash2, Edit3, LayoutDashboard, ChevronRight, Menu, X, Save, ArrowRightCircle, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Trophy, Users, Play, Plus, LogOut, Moon, Sun, Settings, Trash2, Edit3, LayoutDashboard, ChevronRight, Menu, X, Save, ArrowRightCircle, CheckCircle2, AlertCircle, Zap, Eye, EyeOff } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
 // UI Components
@@ -14,6 +14,39 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+
+const UserContext = createContext();
+
+const UserProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const navigate = useNavigate();
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    setUser(null);
+    navigate('/login');
+  };
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      api.get('http://localhost:8081/verify').then(res => {
+        setUser(res.data);
+      }).catch(() => {
+        logout();
+      });
+    }
+  }, []);
+
+  return (
+    <UserContext.Provider value={{ user, setUser, logout }}>
+      {children}
+    </UserContext.Provider>
+  );
+};
+
+const useUser = () => useContext(UserContext);
 
 const ThemeContext = createContext();
 
@@ -37,27 +70,23 @@ const ThemeProvider = ({ children }) => {
   );
 };
 
-const Layout = ({ children }) => {
+const Layout = () => {
   const { darkMode, setDarkMode } = useContext(ThemeContext);
+  const { user, logout } = useUser();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/login');
+    logout();
   };
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
   ];
 
-  if (!localStorage.getItem('token') && !['/login', '/register'].includes(location.pathname)) {
+  if (!localStorage.getItem('token') && !['/login', '/register', '/admin-login'].includes(location.pathname)) {
     return <Navigate to="/login" />;
-  }
-
-  if (['/login', '/register'].includes(location.pathname)) {
-    return children;
   }
 
   return (
@@ -74,7 +103,7 @@ const Layout = ({ children }) => {
           </div>
         </div>
 
-        <nav className="flex-1 px-4 space-y-2">
+        <nav className="flex-1 px-4 space-y-4 overflow-y-auto">
           {navItems.map((item) => (
             <Link
               key={item.path}
@@ -90,6 +119,59 @@ const Layout = ({ children }) => {
               {isSidebarOpen && <span className="ml-3 font-medium">{item.name}</span>}
             </Link>
           ))}
+          
+          {isSidebarOpen && (
+            <>
+              <Separator className="my-2" />
+              <div className="px-3 py-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tournaments</p>
+              </div>
+              <Link
+                to="/my-tournaments"
+                className={cn(
+                  "flex items-center p-3 rounded-lg transition-all text-sm",
+                  location.pathname === '/my-tournaments'
+                    ? "bg-primary text-primary-foreground shadow-md"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                <Trophy size={18} />
+                <span className="ml-3 font-medium">My Tournaments</span>
+              </Link>
+              <Link
+                to="/public-tournaments"
+                className={cn(
+                  "flex items-center p-3 rounded-lg transition-all text-sm",
+                  location.pathname === '/public-tournaments'
+                    ? "bg-primary text-primary-foreground shadow-md"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                <Eye size={18} />
+                <span className="ml-3 font-medium">Public Tournaments</span>
+              </Link>
+              {user?.is_admin && (
+                <>
+                  <Separator className="my-2" />
+                  <div className="px-3 py-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Admin</p>
+                  </div>
+                  <Link
+                    to="/admin"
+                    className={cn(
+                      "flex items-center p-3 rounded-lg transition-all text-sm",
+                      location.pathname === '/admin'
+                        ? "bg-primary text-primary-foreground shadow-md"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    )}
+                  >
+                    <Zap size={18} />
+                    <span className="ml-3 font-medium">Admin Dashboard</span>
+                  </Link>
+                </>
+              )}
+            </>
+          )}
         </nav>
 
         <div className="p-4 border-t space-y-2">
@@ -119,7 +201,7 @@ const Layout = ({ children }) => {
         "flex-1 transition-all duration-300 p-8",
         isSidebarOpen ? "ml-64" : "ml-20"
       )}>
-        {children}
+        <Outlet />
       </main>
     </div>
   );
@@ -224,15 +306,97 @@ const Register = () => {
   );
 };
 
-const Dashboard = () => {
-  const [tournaments, setTournaments] = useState([]);
+const TournamentCreateModal = ({ isOpen, onClose, onSuccess }) => {
   const [name, setName] = useState('');
   const [type, setType] = useState('knockout');
   const [isDouble, setIsDouble] = useState(false);
   const [groupCount, setGroupCount] = useState(1);
   const [teamsPerGroup, setTeamsPerGroup] = useState(4);
   const [promoteCount, setPromoteCount] = useState(2);
-  const [editingId, setEditingId] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const data = {
+      name,
+      type,
+      is_double: isDouble,
+      group_count: parseInt(groupCount),
+      teams_per_group: parseInt(teamsPerGroup),
+      promote_count: parseInt(promoteCount),
+    };
+    try {
+      await api.post('http://localhost:8082/tournaments', data);
+      setName('');
+      setType('knockout');
+      setIsDouble(false);
+      setGroupCount(1);
+      setTeamsPerGroup(4);
+      setPromoteCount(2);
+      onSuccess();
+    } catch (err) {
+      alert('Failed to create tournament: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create New Tournament</DialogTitle>
+          <DialogDescription>Configure your tournament settings</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label>Tournament Name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Summer Cup 2026" required />
+          </div>
+          <div className="space-y-2">
+            <Label>Format</Label>
+            <Select value={type} onValueChange={setType}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select format" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="knockout">Knockout</SelectItem>
+                <SelectItem value="group">Group Stage</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {type === 'group' && (
+            <>
+              <div className="space-y-2">
+                <Label>Number of Groups</Label>
+                <Input type="number" min="1" value={groupCount} onChange={(e) => setGroupCount(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Teams per Group</Label>
+                <Input type="number" min="2" value={teamsPerGroup} onChange={(e) => setTeamsPerGroup(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Promote per Group</Label>
+                <Input type="number" min="0" value={promoteCount} onChange={(e) => setPromoteCount(e.target.value)} />
+              </div>
+            </>
+          )}
+          <div className="flex items-center space-x-2">
+            <Switch id="double-leg" checked={isDouble} onCheckedChange={setIsDouble} />
+            <Label htmlFor="double-leg">Double Leg / Round Robin</Label>
+          </div>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" className="gap-2">
+              <Plus size={18} /> Create Tournament
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const Dashboard = () => {
+  const [tournaments, setTournaments] = useState([]);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   useEffect(() => {
     fetchTournaments();
@@ -247,31 +411,6 @@ const Dashboard = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const data = { 
-      name, 
-      type, 
-      is_double: isDouble, 
-      group_count: parseInt(groupCount), 
-      teams_per_group: parseInt(teamsPerGroup), 
-      promote_count: parseInt(promoteCount) 
-    };
-    try {
-      if (editingId) {
-        await api.put(`http://localhost:8082/tournaments/${editingId}`, data);
-        setEditingId(null);
-      } else {
-        await api.post('http://localhost:8082/tournaments', data);
-      }
-      setName('');
-      setEditingId(null);
-      fetchTournaments();
-    } catch (err) {
-      alert('Action failed: ' + (err.response?.data?.error || err.message));
-    }
-  };
-
   const deleteTournament = async (id) => {
     if (!window.confirm('Delete this tournament? All data will be lost.')) return;
     try {
@@ -282,102 +421,105 @@ const Dashboard = () => {
     }
   };
 
+  const togglePublic = async (id, isPublic) => {
+    try {
+      await api.put(`http://localhost:8082/tournaments/${id}/toggle-public`);
+      fetchTournaments();
+    } catch (err) {
+      alert('Failed to update tournament visibility');
+    }
+  };
+
+  const myTournaments = tournaments.filter(t => !t.is_public);
+  const stats = {
+    total: tournaments.length,
+    public: tournaments.filter(t => t.is_public).length,
+  };
+
   return (
-    <div className="max-w-6xl mx-auto space-y-12">
+    <div className="max-w-7xl mx-auto space-y-8">
       <header>
-        <h1 className="text-4xl font-black tracking-tight mb-2">Tournaments</h1>
-        <p className="text-muted-foreground">Manage your leagues and knockout brackets</p>
+        <h1 className="text-4xl font-black tracking-tight mb-2">Dashboard</h1>
+        <p className="text-muted-foreground">Welcome to TourneyPro - Manage your tournaments</p>
       </header>
 
-      <Card className="border-2 border-primary/10">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            {editingId ? <Edit3 size={20} className="text-primary"/> : <Plus size={20} className="text-primary"/>}
-            {editingId ? 'Edit Tournament' : 'New Tournament'}
-          </CardTitle>
-          <CardDescription>Configure your tournament settings below</CardDescription>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-2">
-              <Label>Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Summer Cup 2026" required />
-            </div>
-            {!editingId && (
-              <div className="space-y-2">
-                <Label>Format</Label>
-                <Select value={type} onValueChange={setType}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select format" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="knockout">Knockout</SelectItem>
-                    <SelectItem value="group">Group Stage</SelectItem>
-                  </SelectContent>
-                </Select>
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-muted-foreground text-sm">Total Tournaments</p>
+                <p className="text-3xl font-bold">{stats.total}</p>
               </div>
-            )}
-            
-            {type === 'group' && (
-              <>
-                <div className="space-y-2">
-                  <Label>Number of Groups</Label>
-                  <Input type="number" min="1" value={groupCount} onChange={(e) => setGroupCount(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Teams per Group</Label>
-                  <Input type="number" min="2" value={teamsPerGroup} onChange={(e) => setTeamsPerGroup(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Promote per Group</Label>
-                  <Input type="number" min="0" value={promoteCount} onChange={(e) => setPromoteCount(e.target.value)} />
-                </div>
-              </>
-            )}
-
-            <div className="flex items-center space-x-2 pt-4">
-              <Switch id="double-leg" checked={isDouble} onCheckedChange={setIsDouble} />
-              <Label htmlFor="double-leg">Double Leg / Round Robin</Label>
+              <Trophy className="text-primary/30" size={40} />
             </div>
           </CardContent>
-          <CardFooter className="justify-end bg-muted/50 p-4">
-            <Button type="submit" className="gap-2">
-               {editingId ? <Save size={18}/> : <Plus size={18}/>}
-               {editingId ? 'Save Changes' : 'Create Tournament'}
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {tournaments.map((t) => (
-          <Card key={t.id} className="overflow-hidden transition-all hover:shadow-lg group">
-            <CardHeader className="pb-4">
-              <div className="flex justify-between items-start">
-                <CardTitle className="line-clamp-1">{t.name}</CardTitle>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditingId(t.id); setName(t.name); setIsDouble(t.is_double); setGroupCount(t.group_count); setTeamsPerGroup(t.teams_per_group); setPromoteCount(t.promote_count); setType(t.type); }}>
-                     <Edit3 size={14}/>
-                   </Button>
-                   <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteTournament(t.id)}>
-                     <Trash2 size={14}/>
-                   </Button>
-                </div>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-muted-foreground text-sm">Public Tournaments</p>
+                <p className="text-3xl font-bold">{stats.public}</p>
               </div>
-              <div className="flex gap-2 flex-wrap pt-2">
-                <Badge variant="secondary" className="capitalize">{t.type}</Badge>
-                {t.is_double && <Badge variant="outline">Double</Badge>}
-                {t.group_count > 1 && <Badge variant="outline">{t.group_count} Groups</Badge>}
-              </div>
-            </CardHeader>
-            <CardFooter className="bg-muted/30 py-3">
-              <Button asChild variant="link" className="px-0 h-auto font-bold">
-                <Link to={`/tournament/${t.id}`}>View Tournament <ChevronRight size={16} className="ml-1" /></Link>
-              </Button>
-            </CardFooter>
-          </Card>
-        ))}
+              <Eye className="text-primary/30" size={40} />
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Create Tournament Button */}
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">Your Tournaments</h2>
+        <Button onClick={() => setIsCreateModalOpen(true)} className="gap-2">
+          <Plus size={18} /> New Tournament
+        </Button>
+      </div>
+
+      {/* Tournaments Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {myTournaments.length === 0 ? (
+          <Card className="col-span-full">
+            <CardContent className="pt-6 text-center py-12">
+              <p className="text-muted-foreground">No tournaments yet. Create one to get started!</p>
+            </CardContent>
+          </Card>
+        ) : (
+          myTournaments.map((t) => (
+            <Card key={t.id} className="overflow-hidden transition-all hover:shadow-lg group">
+              <CardHeader className="pb-4">
+                <div className="flex justify-between items-start gap-2">
+                  <CardTitle className="line-clamp-2">{t.name}</CardTitle>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteTournament(t.id)}>
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
+                <div className="flex gap-2 flex-wrap pt-2">
+                  <Badge variant="secondary" className="capitalize text-xs">{t.type}</Badge>
+                  {t.is_double && <Badge variant="outline" className="text-xs">Double</Badge>}
+                  {t.group_count > 1 && <Badge variant="outline" className="text-xs">{t.group_count} Groups</Badge>}
+                  <Badge variant={t.is_public ? "default" : "secondary"} className="text-xs ml-auto">
+                    {t.is_public ? 'Public' : 'Private'}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardFooter className="bg-muted/30 py-3 flex flex-col gap-2">
+                <Button asChild variant="link" className="px-0 h-auto font-bold w-full justify-start">
+                  <Link to={`/tournament/${t.id}`}>View Tournament <ChevronRight size={16} className="ml-1" /></Link>
+                </Button>
+                <Button variant="outline" size="sm" className="w-full gap-2 text-xs" onClick={() => togglePublic(t.id, t.is_public)}>
+                  {t.is_public ? <EyeOff size={14} /> : <Eye size={14} />}
+                  {t.is_public ? 'Make Private' : 'Make Public'}
+                </Button>
+              </CardFooter>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Tournament Create Modal */}
+      <TournamentCreateModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} onSuccess={() => { setIsCreateModalOpen(false); fetchTournaments(); }} />
     </div>
   );
 };
@@ -715,19 +857,413 @@ const TournamentView = () => {
   );
 };
 
+const MyTournaments = () => {
+  const [tournaments, setTournaments] = useState([]);
+
+  useEffect(() => {
+    fetchTournaments();
+  }, []);
+
+  const fetchTournaments = async () => {
+    try {
+      const res = await api.get('http://localhost:8082/tournaments');
+      const my = (res.data || []).filter(t => !t.is_public);
+      setTournaments(my);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const deleteTournament = async (id) => {
+    if (!window.confirm('Delete this tournament? All data will be lost.')) return;
+    try {
+      await api.delete(`http://localhost:8082/tournaments/${id}`);
+      fetchTournaments();
+    } catch (err) {
+      alert('Delete failed');
+    }
+  };
+
+  const togglePublic = async (id) => {
+    try {
+      await api.put(`http://localhost:8082/tournaments/${id}/toggle-public`);
+      fetchTournaments();
+    } catch (err) {
+      alert('Failed to update tournament visibility');
+    }
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-8">
+      <header>
+        <h1 className="text-4xl font-black tracking-tight mb-2">My Tournaments</h1>
+        <p className="text-muted-foreground">Tournaments you created (private only)</p>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {tournaments.length === 0 ? (
+          <Card className="col-span-full">
+            <CardContent className="pt-6 text-center py-12">
+              <p className="text-muted-foreground">No private tournaments. Create one or make a public tournament private!</p>
+            </CardContent>
+          </Card>
+        ) : (
+          tournaments.map((t) => (
+            <Card key={t.id} className="overflow-hidden transition-all hover:shadow-lg">
+              <CardHeader className="pb-4">
+                <div className="flex justify-between items-start gap-2">
+                  <CardTitle className="line-clamp-2">{t.name}</CardTitle>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteTournament(t.id)}>
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
+                <div className="flex gap-2 flex-wrap pt-2">
+                  <Badge variant="secondary" className="capitalize text-xs">{t.type}</Badge>
+                  {t.group_count > 1 && <Badge variant="outline" className="text-xs">{t.group_count} Groups</Badge>}
+                </div>
+              </CardHeader>
+              <CardFooter className="bg-muted/30 py-3 flex flex-col gap-2">
+                <Button asChild variant="link" className="px-0 h-auto font-bold w-full justify-start">
+                  <Link to={`/tournament/${t.id}`}>View Tournament <ChevronRight size={16} className="ml-1" /></Link>
+                </Button>
+                <Button variant="outline" size="sm" className="w-full gap-2 text-xs" onClick={() => togglePublic(t.id)}>
+                  <Eye size={14} /> Make Public
+                </Button>
+              </CardFooter>
+            </Card>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+const PublicTournaments = () => {
+  const [tournaments, setTournaments] = useState([]);
+
+  useEffect(() => {
+    fetchTournaments();
+  }, []);
+
+  const fetchTournaments = async () => {
+    try {
+      const res = await api.get('http://localhost:8082/tournaments');
+      const pub = (res.data || []).filter(t => t.is_public);
+      setTournaments(pub);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-8">
+      <header>
+        <h1 className="text-4xl font-black tracking-tight mb-2">Public Tournaments</h1>
+        <p className="text-muted-foreground">Tournaments shared by other users - View only</p>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {tournaments.length === 0 ? (
+          <Card className="col-span-full">
+            <CardContent className="pt-6 text-center py-12">
+              <p className="text-muted-foreground">No public tournaments available</p>
+            </CardContent>
+          </Card>
+        ) : (
+          tournaments.map((t) => (
+            <Card key={t.id} className="overflow-hidden transition-all hover:shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="line-clamp-2">{t.name}</CardTitle>
+                <div className="flex gap-2 flex-wrap pt-2">
+                  <Badge variant="secondary" className="capitalize text-xs">{t.type}</Badge>
+                  {t.group_count > 1 && <Badge variant="outline" className="text-xs">{t.group_count} Groups</Badge>}
+                  <Badge variant="default" className="text-xs ml-auto">Public</Badge>
+                </div>
+              </CardHeader>
+              <CardFooter className="bg-muted/30 py-3">
+                <Button asChild variant="link" className="px-0 h-auto font-bold">
+                  <Link to={`/tournament/${t.id}`}>View Tournament <ChevronRight size={16} className="ml-1" /></Link>
+                </Button>
+              </CardFooter>
+            </Card>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+const AdminLogin = () => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const navigate = useNavigate();
+  const { setUser } = useUser();
+
+  useEffect(() => {
+    if (localStorage.getItem('token')) {
+      const token = localStorage.getItem('token');
+      api.get('http://localhost:8081/verify').then(res => {
+        if (res.data.is_admin) {
+          navigate('/admin');
+        } else {
+          navigate('/');
+        }
+      });
+    }
+  }, [navigate, setUser]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await api.post('http://localhost:8081/login', { username, password });
+      localStorage.setItem('token', res.data.token);
+      
+      const verifyRes = await api.get('http://localhost:8081/verify');
+      if (!verifyRes.data.is_admin) {
+        alert('Admin access required');
+        localStorage.removeItem('token');
+        return;
+      }
+      
+      setUser(verifyRes.data);
+      navigate('/admin');
+    } catch (err) {
+      alert('Admin login failed: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-6">
+      <Card className="w-full max-w-md shadow-2xl">
+        <CardHeader className="space-y-1 text-center">
+          <div className="mx-auto bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mb-4">
+            <Zap className="text-primary w-6 h-6" />
+          </div>
+          <CardTitle className="text-3xl font-bold">Admin Access</CardTitle>
+          <CardDescription>Enter admin credentials to access the dashboard</CardDescription>
+        </CardHeader>
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="admin-username">Username</Label>
+              <Input id="admin-username" placeholder="admin" value={username} onChange={(e) => setUsername(e.target.value)} required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="admin-password">Password</Label>
+              <Input id="admin-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-4">
+            <Button className="w-full font-bold h-11" type="submit">Sign In as Admin</Button>
+            <p className="text-center text-sm text-muted-foreground">
+              <Link to="/login" className="text-primary font-semibold hover:underline">Back to user login</Link>
+            </p>
+          </CardFooter>
+        </form>
+      </Card>
+    </div>
+  );
+};
+
+const AdminDashboard = () => {
+  const [users, setUsers] = useState([]);
+  const [allTournaments, setAllTournaments] = useState([]);
+  const [stats, setStats] = useState({});
+  const { user } = useUser();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user?.is_admin) {
+      navigate('/');
+      return;
+    }
+    fetchAdminData();
+  }, [user, navigate]);
+
+  const fetchAdminData = async () => {
+    try {
+      const usersRes = await api.get('http://localhost:8081/admin/users');
+      setUsers(usersRes.data || []);
+      
+      const statsRes = await api.get('http://localhost:8081/admin/stats');
+      setStats(statsRes.data || {});
+      
+      const tournamentsRes = await api.get('http://localhost:8082/admin/tournaments');
+      setAllTournaments(tournamentsRes.data || []);
+    } catch (err) {
+      console.error('Failed to fetch admin data', err);
+    }
+  };
+
+  const deleteUser = async (id) => {
+    if (!window.confirm('Delete this user? All their tournaments will also be deleted.')) return;
+    try {
+      await api.delete(`http://localhost:8081/admin/users/${id}`);
+      fetchAdminData();
+    } catch (err) {
+      alert('Failed to delete user');
+    }
+  };
+
+  const toggleAdmin = async (id) => {
+    try {
+      await api.put(`http://localhost:8081/admin/users/${id}/toggle-admin`);
+      fetchAdminData();
+    } catch (err) {
+      alert('Failed to toggle admin status');
+    }
+  };
+
+  const deleteTournament = async (id) => {
+    if (!window.confirm('Delete this tournament permanently?')) return;
+    try {
+      await api.delete(`http://localhost:8082/admin/tournaments/${id}`);
+      fetchAdminData();
+    } catch (err) {
+      alert('Failed to delete tournament');
+    }
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-8">
+      <header>
+        <h1 className="text-4xl font-black tracking-tight mb-2">Admin Dashboard</h1>
+        <p className="text-muted-foreground">System administration and monitoring</p>
+      </header>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-muted-foreground text-sm">Total Users</p>
+                <p className="text-3xl font-bold">{stats.total_users || 0}</p>
+              </div>
+              <Users className="text-primary/30" size={40} />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-muted-foreground text-sm">Admin Accounts</p>
+                <p className="text-3xl font-bold">{stats.admin_count || 0}</p>
+              </div>
+              <Zap className="text-primary/30" size={40} />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Users Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Users</CardTitle>
+          <CardDescription>Manage users and admin access</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Username</TableHead>
+                <TableHead>Admin Status</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {users.map((u) => (
+                <TableRow key={u.id}>
+                  <TableCell className="font-medium">{u.username}</TableCell>
+                  <TableCell>
+                    <Badge variant={u.is_admin ? "default" : "secondary"}>
+                      {u.is_admin ? 'Admin' : 'User'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {new Date(u.created_at).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell className="text-right space-x-2">
+                    <Button variant="outline" size="sm" onClick={() => toggleAdmin(u.id)}>
+                      {u.is_admin ? 'Remove Admin' : 'Make Admin'}
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => deleteUser(u.id)}>
+                      Delete
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Tournaments Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>All Tournaments</CardTitle>
+          <CardDescription>Manage all system tournaments</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Creator ID</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allTournaments.map((t) => (
+                  <TableRow key={t.id}>
+                    <TableCell className="font-medium line-clamp-1">{t.name}</TableCell>
+                    <TableCell className="capitalize text-sm">{t.type}</TableCell>
+                    <TableCell>
+                      <Badge variant={t.is_public ? "default" : "secondary"} className="text-xs">
+                        {t.is_public ? 'Public' : 'Private'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{t.creator_id}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="destructive" size="sm" onClick={() => deleteTournament(t.id)}>
+                        Delete
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
 function App() {
   return (
     <ThemeProvider>
-      <Router>
-        <Layout>
+      <UserProvider>
+        <Router>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/tournament/:id" element={<TournamentView />} />
+            <Route path="/admin-login" element={<AdminLogin />} />
+            <Route element={<Layout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/my-tournaments" element={<MyTournaments />} />
+              <Route path="/public-tournaments" element={<PublicTournaments />} />
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/tournament/:id" element={<TournamentView />} />
+            </Route>
           </Routes>
-        </Layout>
-      </Router>
+        </Router>
+      </UserProvider>
     </ThemeProvider>
   );
 }

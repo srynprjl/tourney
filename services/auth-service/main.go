@@ -18,6 +18,7 @@ type User struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`
 	Username  string         `gorm:"unique;not null" json:"username"`
 	Password  string         `gorm:"not null" json:"-"`
+	IsAdmin   bool           `gorm:"default:false" json:"is_admin"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
@@ -47,6 +48,19 @@ func initDB() {
 	}
 
 	db.AutoMigrate(&User{})
+	
+	// Create default admin user if it doesn't exist
+	var admin User
+	if err := db.Where("username = ?", "admin").First(&admin).Error; err == gorm.ErrRecordNotFound {
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
+		adminUser := User{
+			Username: "admin",
+			Password: string(hashedPassword),
+			IsAdmin:  true,
+		}
+		db.Create(&adminUser)
+		log.Println("Default admin account created (username: admin, password: admin)")
+	}
 }
 
 func corsMiddleware() gin.HandlerFunc {
@@ -64,6 +78,41 @@ func corsMiddleware() gin.HandlerFunc {
 	}
 }
 
+func adminAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tokenString := c.GetHeader("Authorization")
+		if tokenString == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing token"})
+			c.Abort()
+			return
+		}
+
+		if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
+			tokenString = tokenString[7:]
+		}
+
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return jwtSecret, nil
+		})
+
+		if err != nil || !token.Valid {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			c.Abort()
+			return
+		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok || claims["is_admin"] != true {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+			c.Abort()
+			return
+		}
+
+		c.Set("user_id", claims["user_id"])
+		c.Next()
+	}
+}
+
 func main() {
 	initDB()
 
@@ -73,6 +122,16 @@ func main() {
 	r.POST("/register", register)
 	r.POST("/login", login)
 	r.GET("/verify", verifyToken)
+	
+	// Admin endpoints
+	adminGroup := r.Group("/admin")
+	adminGroup.Use(adminAuthMiddleware())
+	{
+		adminGroup.GET("/users", listUsers)
+		adminGroup.DELETE("/users/:id", deleteUser)
+		adminGroup.PUT("/users/:id/toggle-admin", toggleAdmin)
+		adminGroup.GET("/stats", getStats)
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -135,8 +194,10 @@ func login(c *gin.Context) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": user.ID,
-		"exp":     time.Now().Add(time.Hour * 24).Unix(),
+		"user_id":  user.ID,
+		"username": user.Username,
+		"is_admin": user.IsAdmin,
+		"exp":      time.Now().Add(time.Hour * 24).Unix(),
 	})
 
 	tokenString, err := token.SignedString(jwtSecret)
@@ -175,5 +236,53 @@ func verifyToken(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"user_id": claims["user_id"]})
+	c.JSON(http.StatusOK, gin.H{
+		"user_id": claims["user_id"],
+		"username": claims["username"],
+		"is_admin": claims["is_admin"],
+	})
+}
+
+func listUsers(c *gin.Context) {
+	var users []User
+	db.Find(&users)
+	c.JSON(http.StatusOK, users)
+}
+
+func deleteUser(c *gin.Context) {
+	userID := c.Param("id")
+	if err := db.Delete(&User{}, "id = ?", userID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "User deleted"})
+}
+
+func toggleAdmin(c *gin.Context) {
+	userID := c.Param("id")
+	var user User
+	if err := db.First(&user, "id = ?", userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+	
+	user.IsAdmin = !user.IsAdmin
+	if err := db.Save(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Admin status updated", "is_admin": user.IsAdmin})
+}
+
+func getStats(c *gin.Context) {
+	var totalUsers int64
+	db.Model(&User{}).Count(&totalUsers)
+	
+	var adminCount int64
+	db.Model(&User{}).Where("is_admin = ?", true).Count(&adminCount)
+	
+	c.JSON(http.StatusOK, gin.H{
+		"total_users": totalUsers,
+		"admin_count": adminCount,
+	})
 }
