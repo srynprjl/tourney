@@ -50,7 +50,9 @@ services:
     ports:
       - "3000:80"
     environment:
-      - REACT_APP_API_URL=http://localhost:8080 # This might need an API gateway later
+      - VITE_AUTH_SERVICE_URL=http://auth-service:8081
+      - VITE_TOURNAMENT_SERVICE_URL=http://tournament-service:8082
+      - VITE_MATCH_SERVICE_URL=http://match-service:8083
     depends_on:
       - auth-service
       - tournament-service

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, Navigate, useLocation } from 'react-router-dom';
-import api from './api';
+import { authAPI, tournamentAPI, matchAPI } from './api';
 import { Trophy, Users, Play, Plus, LogOut, Moon, Sun, Settings, Trash2, Edit3, LayoutDashboard, ChevronRight, Menu, X, Save, ArrowRightCircle, CheckCircle2, AlertCircle } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
@@ -137,7 +137,7 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await api.post('http://localhost:8081/login', { username, password });
+      const res = await authAPI.post('/login', { username, password });
       localStorage.setItem('token', res.data.token);
       navigate('/');
     } catch (err) {
@@ -186,7 +186,7 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.post('http://localhost:8081/register', { username, password });
+      await authAPI.post('/register', { username, password });
       alert('Registration successful! Please login.');
       navigate('/login');
     } catch (err) {
@@ -240,7 +240,7 @@ const Dashboard = () => {
 
   const fetchTournaments = async () => {
     try {
-      const res = await api.get('http://localhost:8082/tournaments');
+      const res = await tournamentAPI.get('/tournaments');
       setTournaments(res.data || []);
     } catch (err) {
       console.error(err);
@@ -259,10 +259,10 @@ const Dashboard = () => {
     };
     try {
       if (editingId) {
-        await api.put(`http://localhost:8082/tournaments/${editingId}`, data);
+        await tournamentAPI.put(`/tournaments/${editingId}`, data);
         setEditingId(null);
       } else {
-        await api.post('http://localhost:8082/tournaments', data);
+        await tournamentAPI.post('/tournaments', data);
       }
       setName('');
       setEditingId(null);
@@ -275,7 +275,7 @@ const Dashboard = () => {
   const deleteTournament = async (id) => {
     if (!window.confirm('Delete this tournament? All data will be lost.')) return;
     try {
-      await api.delete(`http://localhost:8082/tournaments/${id}`);
+      await tournamentAPI.delete(`/tournaments/${id}`);
       fetchTournaments();
     } catch (err) {
       alert('Delete failed');
@@ -397,7 +397,7 @@ const TournamentView = () => {
 
   const fetchTournament = async () => {
     try {
-      const res = await api.get(`http://localhost:8082/tournaments/${id}`);
+      const res = await tournamentAPI.get(`/tournaments/${id}`);
       setTournament(res.data);
     } catch (err) {
       console.error(err);
@@ -406,7 +406,7 @@ const TournamentView = () => {
 
   const fetchStandings = async () => {
     try {
-      const res = await api.get(`http://localhost:8082/tournaments/${id}/standings`);
+      const res = await tournamentAPI.get(`/tournaments/${id}/standings`);
       setStandings(res.data || []);
     } catch (err) {
       console.error(err);
@@ -417,10 +417,10 @@ const TournamentView = () => {
     e.preventDefault();
     try {
       if (editingTeam) {
-        await api.put(`http://localhost:8082/tournaments/${id}/teams/${editingTeam.id}`, { name: teamName });
+        await tournamentAPI.put(`/tournaments/${id}/teams/${editingTeam.id}`, { name: teamName });
         setEditingTeam(null);
       } else {
-        await api.post(`http://localhost:8082/tournaments/${id}/teams`, { name: teamName });
+        await tournamentAPI.post(`/tournaments/${id}/teams`, { name: teamName });
       }
       setTeamName('');
       fetchTournament();
@@ -432,7 +432,7 @@ const TournamentView = () => {
   const deleteTeam = async (teamId) => {
     if (!window.confirm('Remove team?')) return;
     try {
-      await api.delete(`http://localhost:8082/tournaments/${id}/teams/${teamId}`);
+      await tournamentAPI.delete(`/tournaments/${id}/teams/${teamId}`);
       fetchTournament();
     } catch (err) {
       alert('Remove failed');
@@ -441,7 +441,7 @@ const TournamentView = () => {
 
   const generate = async () => {
     try {
-      await api.post(`http://localhost:8082/tournaments/${id}/generate`);
+      await tournamentAPI.post(`/tournaments/${id}/generate`);
       fetchTournament();
       fetchStandings();
     } catch (err) {
@@ -452,7 +452,7 @@ const TournamentView = () => {
   const promote = async () => {
     if (!window.confirm('Promote top teams to knockout stage? This will generate new matches.')) return;
     try {
-      await api.post(`http://localhost:8082/tournaments/${id}/promote`);
+      await tournamentAPI.post(`/tournaments/${id}/promote`);
       fetchTournament();
     } catch (err) {
       alert('Promotion failed: ' + (err.response?.data?.error || err.message));
@@ -467,7 +467,7 @@ const TournamentView = () => {
       return;
     }
     try {
-      await api.put(`http://localhost:8083/matches/${matchId}/score`, { team1_score: score1, team2_score: score2 });
+      await matchAPI.put(`/matches/${matchId}/score`, { team1_score: score1, team2_score: score2 });
       fetchTournament();
       fetchStandings();
     } catch (err) {
