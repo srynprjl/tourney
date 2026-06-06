@@ -176,13 +176,36 @@ func updateScore(c *gin.Context) {
 			if tournament.IsDouble && match.TieID != nil {
 				var sibling Match
 				if err := db.Where("tie_id = ? AND id != ?", *match.TieID, match.ID).First(&sibling).Error; err == nil {
-					// Aggregate winner
-					t1Total := match.Team1Score + sibling.Team1Score
-					t2Total := match.Team2Score + sibling.Team2Score
-					if t1Total > t2Total {
-						performAdvance(match, match.Team1ID)
-					} else if t2Total > t1Total {
-						performAdvance(match, match.Team2ID)
+					// Only advance if BOTH legs are played
+					if match.IsPlayed && sibling.IsPlayed {
+						// We need to be careful with team IDs because teams swap in Leg 2
+						// Leg 1: A (T1) vs B (T2)
+						// Leg 2: B (T1) vs A (T2)
+						
+						// Calculate totals for Team A (match.Team1ID in Leg 1)
+						// For the current match:
+						var t1Total, t2Total int
+						
+						// Use match.ID and sibling.ID to determine which is first leg if needed,
+						// but simpler: just look at TeamIDs.
+						// Aggregate score for Team 1 of the current match:
+						t1Total = match.Team1Score
+						t2Total = match.Team2Score
+						
+						// Add sibling scores. If sibling's Team1 is match's Team2, then sibling's Team1Score belongs to match's Team2.
+						if sibling.Team1ID == match.Team1ID {
+							t1Total += sibling.Team1Score
+							t2Total += sibling.Team2Score
+						} else {
+							t1Total += sibling.Team2Score
+							t2Total += sibling.Team1Score
+						}
+
+						if t1Total > t2Total {
+							performAdvance(match, match.Team1ID)
+						} else if t2Total > t1Total {
+							performAdvance(match, match.Team2ID)
+						}
 					}
 				}
 			} else if match.WinnerID != nil {
