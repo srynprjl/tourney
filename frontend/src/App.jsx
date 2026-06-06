@@ -1248,8 +1248,8 @@ const AdminDashboard = () => {
 function App() {
   return (
     <ThemeProvider>
-      <UserProvider>
-        <Router>
+      <Router>
+        <UserProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -1262,8 +1262,8 @@ function App() {
               <Route path="/tournament/:id" element={<TournamentView />} />
             </Route>
           </Routes>
-        </Router>
-      </UserProvider>
+        </UserProvider>
+      </Router>
     </ThemeProvider>
   );
 }
