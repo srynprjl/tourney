@@ -1,63 +1,115 @@
 version: '3.8'
 
 services:
-  postgres:
+  # Databases
+  db-auth:
     image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: tournament_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    environment: [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=auth_db]
+    volumes: [auth_data:/var/lib/postgresql/data]
 
-  auth-service:
-    build: ./services/auth-service
-    ports:
-      - "8081:8081"
-    environment:
-      - DB_URL=postgres://user:password@postgres:5432/tournament_db?sslmode=disable
-      - JWT_SECRET=your_jwt_secret
-    depends_on:
-      - postgres
+  db-tournament:
+    image: postgres:15-alpine
+    environment: [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=tournament_db]
+    volumes: [tournament_data:/var/lib/postgresql/data]
 
-  tournament-service:
-    build: ./services/tournament-service
-    ports:
-      - "8082:8082"
-    environment:
-      - DB_URL=postgres://user:password@postgres:5432/tournament_db?sslmode=disable
-      - AUTH_SERVICE_URL=http://auth-service:8081
-    depends_on:
-      - postgres
-      - auth-service
+  db-team:
+    image: postgres:15-alpine
+    environment: [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=team_db]
+    volumes: [team_data:/var/lib/postgresql/data]
 
-  match-service:
-    build: ./services/match-service
-    ports:
-      - "8083:8083"
-    environment:
-      - DB_URL=postgres://user:password@postgres:5432/tournament_db?sslmode=disable
-      - TOURNAMENT_SERVICE_URL=http://tournament-service:8082
-      - AUTH_SERVICE_URL=http://auth-service:8081
-    depends_on:
-      - postgres
-      - tournament-service
+  db-match:
+    image: postgres:15-alpine
+    environment: [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=match_db]
+    volumes: [match_data:/var/lib/postgresql/data]
 
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:80"
-    environment:
-      - VITE_AUTH_SERVICE_URL=http://auth-service:8081
-      - VITE_TOURNAMENT_SERVICE_URL=http://tournament-service:8082
-      - VITE_MATCH_SERVICE_URL=http://match-service:8083
-      - VITE_API_URL=http://localhost:8080
+  db-payment:
+    image: postgres:15-alpine
+    environment: [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=payment_db]
+    volumes: [payment_data:/var/lib/postgresql/data]
+
+  db-profile:
+    image: postgres:15-alpine
+    environment: [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=profile_db]
+    volumes: [profile_data:/var/lib/postgresql/data]
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  # API Gateway
+  api-gateway:
+    build: ./api-gateway
+    ports: ["8080:80"]
     depends_on:
       - auth-service
       - tournament-service
       - match-service
+      - team-service
+      - payment-service
+      - profile-service
+      - realtime-service
+
+  # Services
+  auth-service:
+    build: ./services/auth-service
+    environment:
+      - DB_URL=postgres://user:password@db-auth:5432/auth_db?sslmode=disable
+      - JWT_SECRET=your_jwt_secret
+    depends_on: [db-auth]
+
+  tournament-service:
+    build: ./services/tournament-service
+    environment:
+      - DB_URL=postgres://user:password@db-tournament:5432/tournament_db?sslmode=disable
+      - AUTH_SERVICE_URL=http://auth-service:8081
+    depends_on: [db-tournament, auth-service]
+
+  match-service:
+    build: ./services/match-service
+    environment:
+      - DB_URL=postgres://user:password@db-match:5432/match_db?sslmode=disable
+      - TOURNAMENT_SERVICE_URL=http://tournament-service:8082
+      - AUTH_SERVICE_URL=http://auth-service:8081
+      - REALTIME_SERVICE_URL=http://realtime-service:8087
+    depends_on: [db-match, tournament-service]
+
+  team-service:
+    build: ./services/team-service
+    environment:
+      - DB_URL=postgres://user:password@db-team:5432/team_db?sslmode=disable
+      - AUTH_SERVICE_URL=http://auth-service:8081
+      - REALTIME_SERVICE_URL=http://realtime-service:8087
+    depends_on: [db-team]
+
+  payment-service:
+    build: ./services/payment-service
+    environment:
+      - DB_URL=postgres://user:password@db-payment:5432/payment_db?sslmode=disable
+    depends_on: [db-payment]
+
+  profile-service:
+    build: ./services/profile-service
+    environment:
+      - DB_URL=postgres://user:password@db-profile:5432/profile_db?sslmode=disable
+    depends_on: [db-profile]
+
+  realtime-service:
+    build: ./services/realtime-service
+    environment:
+      - REDIS_URL=redis:6379
+    depends_on: [redis]
+
+  frontend:
+    build: ./frontend
+    ports: ["3000:80"]
+    environment:
+      - VITE_API_URL=http://localhost:8080
+    depends_on: [api-gateway]
 
 volumes:
-  postgres_data:
+  auth_data:
+  tournament_data:
+  team_data:
+  match_data:
+  payment_data:
+  profile_data:

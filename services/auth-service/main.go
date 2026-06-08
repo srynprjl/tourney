@@ -19,6 +19,7 @@ type User struct {
 	Username  string         `gorm:"unique;not null" json:"username"`
 	Password  string         `gorm:"not null" json:"-"`
 	IsAdmin   bool           `gorm:"default:false" json:"is_admin"`
+	IsBanned  bool           `gorm:"default:false" json:"is_banned"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
@@ -63,21 +64,6 @@ func initDB() {
 	}
 }
 
-func corsMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-
-		c.Next()
-	}
-}
-
 func adminAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString := c.GetHeader("Authorization")
@@ -102,7 +88,14 @@ func adminAuthMiddleware() gin.HandlerFunc {
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok || claims["is_admin"] != true {
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid claims"})
+			c.Abort()
+			return
+		}
+
+		isAdmin, _ := claims["is_admin"].(bool)
+		if !isAdmin {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
 			c.Abort()
 			return
@@ -117,11 +110,11 @@ func main() {
 	initDB()
 
 	r := gin.Default()
-	r.Use(corsMiddleware())
 
 	r.POST("/register", register)
 	r.POST("/login", login)
 	r.GET("/verify", verifyToken)
+	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "healthy"}) })
 	
 	// Admin endpoints
 	adminGroup := r.Group("/admin")
@@ -130,6 +123,7 @@ func main() {
 		adminGroup.GET("/users", listUsers)
 		adminGroup.DELETE("/users/:id", deleteUser)
 		adminGroup.PUT("/users/:id/toggle-admin", toggleAdmin)
+		adminGroup.PUT("/users/:id/toggle-ban", toggleBan)
 		adminGroup.GET("/stats", getStats)
 	}
 
@@ -193,6 +187,11 @@ func login(c *gin.Context) {
 		return
 	}
 
+	if user.IsBanned {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Account suspended"})
+		return
+	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id":  user.ID,
 		"username": user.Username,
@@ -236,6 +235,12 @@ func verifyToken(c *gin.Context) {
 		return
 	}
 
+	var user User
+	if err := db.First(&user, claims["user_id"]).Error; err == nil && user.IsBanned {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Account suspended"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"user_id": claims["user_id"],
 		"username": claims["username"],
@@ -272,6 +277,22 @@ func toggleAdmin(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Admin status updated", "is_admin": user.IsAdmin})
+}
+
+func toggleBan(c *gin.Context) {
+	userID := c.Param("id")
+	var user User
+	if err := db.First(&user, "id = ?", userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+	
+	user.IsBanned = !user.IsBanned
+	if err := db.Save(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Ban status updated", "is_banned": user.IsBanned})
 }
 
 func getStats(c *gin.Context) {
