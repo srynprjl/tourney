@@ -41,6 +41,7 @@ const MatchOfficiatingPage = () => {
       setTournament(tRes.data);
     } catch (err) {
       console.error(err);
+      setError(err.response?.data?.error || err.message);
     }
   };
 
@@ -93,8 +94,8 @@ const MatchOfficiatingPage = () => {
 
   if (!match || !tournament) return <div className="p-12 text-center animate-pulse font-black text-muted-foreground">LOADING DATA...</div>;
 
-  const t1 = tournament.teams?.find(t => t.id === match.team1_id);
-  const t2 = tournament.teams?.find(t => t.id === match.team2_id);
+  const t1 = tournament.teams?.find(t => t.squad_id === match.team1_id);
+  const t2 = tournament.teams?.find(t => t.squad_id === match.team2_id);
 
   const formatTime = (s) => {
     const mins = Math.floor(s / 60);

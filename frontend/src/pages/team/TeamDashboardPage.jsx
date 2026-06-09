@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { teamService } from '@/services/teamService';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { 
@@ -18,6 +18,18 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Plus } from "lucide-react";
+
 const TeamDashboardPage = () => {
   const { id } = useParams();
   const { user: currentUser } = useAuth();
@@ -27,6 +39,10 @@ const TeamDashboardPage = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [apps, setApps] = useState([]);
   
+  // Award states
+  const [awardModalOpen, setAwardModalOpen] = useState(false);
+  const [newAward, setNewAward] = useState({ title: '', description: '' });
+
   const [chatMessages, setChatHistory] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const chatEndRef = useRef(null);
@@ -120,9 +136,92 @@ const TeamDashboardPage = () => {
     }
   };
 
+  const handleAddAward = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post(`/team/${id}/awards`, newAward);
+      setNewAward({ title: '', description: '' });
+      setAwardModalOpen(false);
+      fetchTeam();
+    } catch (err) {
+      alert('Failed to add award');
+    }
+  };
+
+  const handleDeleteAward = async (awardId) => {
+    if (!window.confirm('Delete this achievement?')) return;
+    try {
+      await api.delete(`/team/${id}/awards/${awardId}`);
+      fetchTeam();
+    } catch (err) {
+      alert('Deletion failed');
+    }
+  };
+
   if (!team) return <div className="p-12 text-center font-black animate-pulse text-muted-foreground uppercase tracking-widest">CONNECTING TO SQUAD HUD...</div>;
 
-  const isOwner = team.owner_id === currentUser?.user_id || currentUser?.role === 'admin';
+  const isOwner = team.owner_id === currentUser?.user_id || currentUser?.is_admin;
+  const isMember = team.members?.some(m => m.user_id === currentUser?.user_id);
+  const myApp = apps.find(a => a.user_id === currentUser?.user_id && a.status === 'pending');
+
+  if (!isMember && !isOwner) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-12 py-20">
+        <div className="text-center space-y-6">
+          <Shield size={80} className="mx-auto text-primary/20" />
+          <h1 className="text-6xl font-black tracking-tighter uppercase italic">{team.name}</h1>
+          <p className="text-muted-foreground font-bold text-xl">Operational clearance required to access this squad HUD.</p>
+        </div>
+        
+        <Card className="rounded-[3rem] border-none shadow-2xl p-12 bg-card space-y-8">
+          {myApp ? (
+            <div className="text-center py-12 space-y-6">
+              <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto shadow-xl">
+                 <ShieldCheck size={40} className="text-green-500" />
+              </div>
+              <div className="space-y-2">
+                 <h2 className="text-3xl font-black uppercase tracking-tight italic">Application Transmitted</h2>
+                 <p className="text-muted-foreground font-medium">Your credentials have been successfully uploaded to the squad registry. Awaiting commander vetting.</p>
+              </div>
+              <Button asChild variant="outline" className="rounded-2xl font-black px-10 h-14 border-primary/20 text-primary">
+                 <Link to="/teams">RETURN TO SQUAD LIST</Link>
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-4">
+                <h2 className="text-2xl font-black uppercase tracking-tight italic">Enlistment Request</h2>
+                <p className="text-muted-foreground font-medium">Transmit your credentials and a brief operational message to the squad commander for vetting.</p>
+              </div>
+              
+              <div className="space-y-4">
+                <textarea 
+                  className="w-full min-h-[150px] p-8 bg-muted/30 rounded-[2rem] outline-none focus:ring-2 focus:ring-primary font-medium italic"
+                  placeholder="Why should you be part of this squad?"
+                  id="appMessage"
+                />
+                <Button 
+                  onClick={async () => {
+                    const msg = document.getElementById('appMessage').value;
+                    try {
+                      await teamService.apply(id, msg);
+                      alert('Application transmitted successfully');
+                      fetchApplications();
+                    } catch (err) {
+                      alert(err.response?.data?.error || 'Transmission failed');
+                    }
+                  }}
+                  className="w-full h-16 rounded-[1.5rem] font-black text-xl shadow-xl shadow-primary/20"
+                >
+                  TRANSMIT APPLICATION
+                </Button>
+              </div>
+            </>
+          )}
+        </Card>
+      </div>
+    );
+  }
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -346,17 +445,77 @@ const TeamDashboardPage = () => {
         )}
 
         {activeTab === 'achievements' && (
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-5xl mx-auto py-10">
-              {[1, 2].map(i => (
-                <Card key={i} className="text-center py-16 relative overflow-hidden group rounded-[3rem] border-none shadow-2xl bg-card">
-                   <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 -mr-16 -mt-16 rounded-full group-hover:scale-150 transition-all duration-700" />
-                   <div className="w-20 h-20 bg-yellow-500/10 text-yellow-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner">
-                      <Award size={40} />
-                   </div>
-                   <CardTitle className="text-2xl font-black uppercase tracking-tighter italic">Regional Champion</CardTitle>
-                   <CardDescription className="mt-3 font-black text-primary text-sm tracking-[0.2em] uppercase">Est. $1,250 Earnings</CardDescription>
-                </Card>
-              ))}
+           <div className="max-w-5xl mx-auto py-10 space-y-10">
+              <div className="flex justify-between items-center px-4">
+                 <h2 className="text-3xl font-black uppercase tracking-tighter italic">Squad Achievements</h2>
+                 {isOwner && (
+                    <Dialog open={awardModalOpen} onOpenChange={setAwardModalOpen}>
+                       <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="rounded-xl font-black gap-2">
+                             <Plus size={16}/> ADD AWARD
+                          </Button>
+                       </DialogTrigger>
+                       <DialogContent className="rounded-[2.5rem] border-none shadow-2xl p-0 overflow-hidden">
+                          <DialogHeader className="bg-yellow-500 p-10 text-white">
+                             <DialogTitle className="text-3xl font-black uppercase italic tracking-tighter">New Trophy</DialogTitle>
+                             <DialogDescription className="text-white/70 font-bold uppercase text-[10px] tracking-widest mt-2">Log a new squad milestone</DialogDescription>
+                          </DialogHeader>
+                          <form onSubmit={handleAddAward} className="p-10 space-y-6">
+                             <div className="space-y-2">
+                                <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground">Trophy Title</Label>
+                                <Input 
+                                   placeholder="E.g. Regional Champion, League Winner" 
+                                   className="h-14 rounded-2xl font-black text-lg" 
+                                   value={newAward.title}
+                                   onChange={e => setNewAward({...newAward, title: e.target.value})}
+                                   required 
+                                />
+                             </div>
+                             <div className="space-y-2">
+                                <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground">Context / Competition</Label>
+                                <Input 
+                                   placeholder="E.g. Pro Cup 2026" 
+                                   className="h-14 rounded-2xl font-black text-lg" 
+                                   value={newAward.description}
+                                   onChange={e => setNewAward({...newAward, description: e.target.value})}
+                                   required 
+                                />
+                             </div>
+                             <DialogFooter>
+                                <Button type="submit" className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-yellow-500/20 mt-4 bg-yellow-500 hover:bg-yellow-600">ENSHRINE TROPHY</Button>
+                             </DialogFooter>
+                          </form>
+                       </DialogContent>
+                    </Dialog>
+                 )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                 {team.awards?.map(award => (
+                   <Card key={award.id} className="text-center py-16 relative overflow-hidden group rounded-[3rem] border-none shadow-2xl bg-card">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 -mr-16 -mt-16 rounded-full group-hover:scale-150 transition-all duration-700" />
+                      <div className="w-20 h-20 bg-yellow-500/10 text-yellow-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner transition-transform group-hover:scale-110">
+                         <Trophy size={40} />
+                      </div>
+                      <CardTitle className="text-2xl font-black uppercase tracking-tighter italic">{award.title}</CardTitle>
+                      <CardDescription className="mt-3 font-black text-primary text-sm tracking-[0.2em] uppercase">{award.description}</CardDescription>
+                      {isOwner && (
+                         <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleDeleteAward(award.id)}
+                            className="absolute top-6 right-6 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                         >
+                            <Trash2 size={16}/>
+                         </Button>
+                      )}
+                   </Card>
+                 ))}
+                 {(!team.awards || team.awards.length === 0) && (
+                    <div className="col-span-full py-40 text-center bg-muted/10 rounded-[4rem] border-2 border-dashed">
+                       <p className="text-muted-foreground font-black uppercase text-xs tracking-widest italic">No squad achievements recorded</p>
+                    </div>
+                 )}
+              </div>
            </div>
         )}
       </div>

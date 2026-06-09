@@ -25,6 +25,16 @@ type User struct {
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
+type Application struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Username  string    `gorm:"unique;not null" json:"username"`
+	Password  string    `json:"-"`
+	Email     string    `gorm:"unique;not null" json:"email"`
+	Reason    string    `json:"reason"`
+	Status    string    `gorm:"default:'pending'" json:"status"` // pending, approved, rejected
+	CreatedAt time.Time `json:"created_at"`
+}
+
 var db *gorm.DB
 var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
 
@@ -48,8 +58,8 @@ func initDB() {
 		log.Fatal("Could not connect to database after retries:", err)
 	}
 
-	db.AutoMigrate(&User{})
-	
+	db.AutoMigrate(&User{}, &Application{})
+
 	// Create default admin user if it doesn't exist
 	var admin User
 	if err := db.Where("username = ?", "admin").First(&admin).Error; err == gorm.ErrRecordNotFound {
@@ -114,8 +124,9 @@ func main() {
 	r.POST("/register", register)
 	r.POST("/login", login)
 	r.GET("/verify", verifyToken)
+	r.POST("/apply", apply)
 	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "healthy"}) })
-	
+
 	// Admin endpoints
 	adminGroup := r.Group("/admin")
 	adminGroup.Use(adminAuthMiddleware())
@@ -125,6 +136,8 @@ func main() {
 		adminGroup.PUT("/users/:id/toggle-admin", toggleAdmin)
 		adminGroup.PUT("/users/:id/toggle-ban", toggleBan)
 		adminGroup.GET("/stats", getStats)
+		adminGroup.GET("/applications", listApplications)
+		adminGroup.PUT("/applications/:id", handleApplication)
 	}
 
 	port := os.Getenv("PORT")
@@ -242,7 +255,7 @@ func verifyToken(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"user_id": claims["user_id"],
+		"user_id":  claims["user_id"],
 		"username": claims["username"],
 		"is_admin": claims["is_admin"],
 	})
@@ -270,7 +283,7 @@ func toggleAdmin(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
-	
+
 	user.IsAdmin = !user.IsAdmin
 	if err := db.Save(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
@@ -286,7 +299,7 @@ func toggleBan(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
-	
+
 	user.IsBanned = !user.IsBanned
 	if err := db.Save(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
@@ -298,12 +311,92 @@ func toggleBan(c *gin.Context) {
 func getStats(c *gin.Context) {
 	var totalUsers int64
 	db.Model(&User{}).Count(&totalUsers)
-	
+
 	var adminCount int64
 	db.Model(&User{}).Where("is_admin = ?", true).Count(&adminCount)
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"total_users": totalUsers,
 		"admin_count": adminCount,
 	})
 }
+
+func apply(c *gin.Context) {
+	var input struct {
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
+		Email    string `json:"email" binding:"required"`
+		Reason   string `json:"reason" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var existing Application
+	if err := db.Where("username = ? OR email = ?", input.Username, input.Email).First(&existing).Error; err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Application already submitted for this username or email"})
+		return
+	}
+
+	// Check if user already exists
+	var existingUser User
+	if err := db.Where("username = ?", input.Username).First(&existingUser).Error; err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username already taken"})
+		return
+	}
+
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	app := Application{
+		Username:  input.Username,
+		Password:  string(hashedPassword),
+		Email:     input.Email,
+		Reason:    input.Reason,
+		CreatedAt: time.Now(),
+	}
+
+	if err := db.Create(&app).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit application"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "Application submitted successfully"})
+}
+
+func listApplications(c *gin.Context) {
+	var apps []Application
+	db.Find(&apps)
+	c.JSON(http.StatusOK, apps)
+}
+
+func handleApplication(c *gin.Context) {
+	id := c.Param("id")
+	var input struct {
+		Status string `json:"status" binding:"required"` // approved, rejected
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var app Application
+	if err := db.First(&app, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Application not found"})
+		return
+	}
+
+	app.Status = input.Status
+	db.Save(&app)
+
+	if input.Status == "approved" {
+		user := User{
+			Username: app.Username,
+			Password: app.Password,
+		}
+		db.Create(&user)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Application " + input.Status})
+}
+

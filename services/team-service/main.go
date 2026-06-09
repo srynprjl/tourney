@@ -24,8 +24,17 @@ type Team struct {
 	LogoURL     string         `json:"logo_url"`
 	Members     []TeamMember   `gorm:"constraint:OnDelete:CASCADE;" json:"members"`
 	Posts       []TeamPost     `gorm:"constraint:OnDelete:CASCADE;" json:"posts"`
+	Awards      []TeamAward    `gorm:"constraint:OnDelete:CASCADE;" json:"awards"`
 	CreatedAt   time.Time      `json:"created_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+type TeamAward struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	TeamID      uuid.UUID `gorm:"type:uuid;not null;index" json:"team_id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Date        time.Time `json:"date"`
 }
 
 type TeamMember struct {
@@ -75,47 +84,55 @@ func initDB() {
 		if err == nil { break }
 		time.Sleep(2 * time.Second)
 	}
-	db.AutoMigrate(&Team{}, &TeamMember{}, &TeamPost{}, &TeamApplication{}, &ChatMessage{})
+	db.AutoMigrate(&Team{}, &TeamMember{}, &TeamPost{}, &TeamApplication{}, &ChatMessage{}, &TeamAward{})
 }
 
 func authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" { c.AbortWithStatusJSON(401, gin.H{"error": "Unauthorized"}); return }
+		if authHeader == "" {
+			c.AbortWithStatusJSON(401, gin.H{"error": "Unauthorized"})
+			return
+		}
 		authURL := os.Getenv("AUTH_SERVICE_URL")
-		if authURL == "" { authURL = "http://auth-service:8081" }
+		if authURL == "" {
+			authURL = "http://auth-service:8081"
+		}
 		req, _ := http.NewRequest("GET", authURL+"/verify", nil)
 		req.Header.Set("Authorization", authHeader)
 		resp, err := (&http.Client{}).Do(req)
-		if err != nil || resp.StatusCode != 200 { c.AbortWithStatusJSON(401, gin.H{"error": "Invalid token"}); return }
-		var res struct { 
-			UserID float64 `json:"user_id"`
-			Username string `json:"username"`
-			IsAdmin bool `json:"is_admin"`
+		if err != nil || resp.StatusCode != 200 {
+			c.AbortWithStatusJSON(401, gin.H{"error": "Invalid token"})
+			return
+		}
+		var res struct {
+			UserID   float64 `json:"user_id"`
+			Username string  `json:"username"`
+			IsAdmin  bool    `json:"is_admin"`
 		}
 		json.NewDecoder(resp.Body).Decode(&res)
-		c.Set("userID", uint(res.UserID))
+		c.Set("user_id", uint(res.UserID))
 		c.Set("username", res.Username)
-		c.Set("isAdmin", res.IsAdmin)
+		c.Set("is_admin", res.IsAdmin)
 		c.Next()
 	}
 }
 
-		func main() {
-		initDB()
-		r := gin.Default()
+func main() {
+	initDB()
+	r := gin.Default()
 
-		r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "healthy"}) })
+	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "healthy"}) })
 
-		api := r.Group("/")
-		api.Use(authMiddleware())
-		{
-			api.GET("/", listPublicTeams)
-			api.POST("/", createTeam)
-			api.GET("/my", listMyTeams)
-			api.POST("/join", joinTeam)
+	api := r.Group("/")
+	api.Use(authMiddleware())
+	{
+		api.GET("/", listPublicTeams)
+		api.POST("/", createTeam)
+		api.GET("/my", listMyTeams)
+		api.POST("/join", joinTeam)
 
-			api.GET("/:id", getTeam)
+		api.GET("/:id", getTeam)
 		api.DELETE("/:id", deleteTeam)
 		api.DELETE("/:id/leave", leaveTeam)
 		api.POST("/:id/apply", applyToTeam)
@@ -125,24 +142,29 @@ func authMiddleware() gin.HandlerFunc {
 		api.GET("/:id/posts", listPosts)
 		api.POST("/:id/chat", sendChatMessage)
 		api.GET("/:id/chat", getChatHistory)
-		}
-		port := os.Getenv("PORT")
-		if port == "" { port = "8084" }
-		r.Run(":" + port)
-		}
+		api.POST("/:id/awards", addTeamAward)
+		api.DELETE("/:id/awards/:awardId", deleteTeamAward)
+		api.GET("/:id/history", getTeamHistory)
+	}
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8084"
+	}
+	r.Run(":" + port)
+}
 
-		func createTeam(c *gin.Context) {
-	var input struct { 
-		Name string `json:"name" binding:"required"`
-		Sport string `json:"sport" binding:"required"`
+func createTeam(c *gin.Context) {
+	var input struct {
+		Name        string `json:"name" binding:"required"`
+		Sport       string `json:"sport" binding:"required"`
 		Description string `json:"description"`
-		IsPublic bool `json:"is_public"`
+		IsPublic    bool   `json:"is_public"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	uid := c.MustGet("userID").(uint)
+	uid := c.MustGet("user_id").(uint)
 	uname := c.MustGet("username").(string)
 
 	var existing TeamMember
@@ -164,7 +186,7 @@ func listPublicTeams(c *gin.Context) {
 }
 
 func listMyTeams(c *gin.Context) {
-	uid := c.MustGet("userID").(uint)
+	uid := c.MustGet("user_id").(uint)
 	var ms []TeamMember
 	db.Where("user_id = ?", uid).Find(&ms)
 	var ids []uuid.UUID
@@ -176,16 +198,60 @@ func listMyTeams(c *gin.Context) {
 
 func getTeam(c *gin.Context) {
 	var t Team
-	if err := db.Preload("Members").First(&t, "id = ?", c.Param("id")).Error; err != nil {
+	if err := db.Preload("Members").Preload("Awards").First(&t, "id = ?", c.Param("id")).Error; err != nil {
 		c.JSON(404, gin.H{"error": "Not found"})
 		return
 	}
 	c.JSON(200, t)
 }
 
+func addTeamAward(c *gin.Context) {
+	tid, _ := uuid.Parse(c.Param("id"))
+	uid := c.MustGet("user_id").(uint)
+
+	var t Team
+	db.First(&t, "id = ?", tid)
+	if t.OwnerID != uid {
+		c.JSON(403, gin.H{"error": "Only owners can add awards"})
+		return
+	}
+
+	var a TeamAward
+	if err := c.ShouldBindJSON(&a); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	a.TeamID = tid
+	a.Date = time.Now()
+	db.Create(&a)
+	c.JSON(201, a)
+}
+
+func deleteTeamAward(c *gin.Context) {
+	tid, _ := uuid.Parse(c.Param("id"))
+	aid := c.Param("awardId")
+	uid := c.MustGet("user_id").(uint)
+
+	var t Team
+	db.First(&t, "id = ?", tid)
+	if t.OwnerID != uid {
+		c.JSON(403, gin.H{"error": "Only owners can delete awards"})
+		return
+	}
+
+	db.Delete(&TeamAward{}, "id = ? AND team_id = ?", aid, tid)
+	c.JSON(200, gin.H{"message": "Award deleted"})
+}
+
+func getTeamHistory(c *gin.Context) {
+	// This would typically come from tournament-service or a shared history service
+	// For now, we'll return an empty list or mock data if we want
+	c.JSON(200, []interface{}{})
+}
+
 func deleteTeam(c *gin.Context) {
 	tid, _ := uuid.Parse(c.Param("id"))
-	uid := c.MustGet("userID").(uint)
+	uid := c.MustGet("user_id").(uint)
 	
 	var t Team
 	if err := db.First(&t, "id = ?", tid).Error; err != nil {
@@ -207,7 +273,7 @@ func joinTeam(c *gin.Context) {
 	var input struct { InviteCode string `json:"invite_code" binding:"required"` }
 	c.ShouldBindJSON(&input)
 	
-	uid := c.MustGet("userID").(uint)
+	uid := c.MustGet("user_id").(uint)
 	uname := c.MustGet("username").(string)
 
 	var existing TeamMember
@@ -227,7 +293,7 @@ func joinTeam(c *gin.Context) {
 
 func leaveTeam(c *gin.Context) {
 	tid, _ := uuid.Parse(c.Param("id"))
-	uid := c.MustGet("userID").(uint)
+	uid := c.MustGet("user_id").(uint)
 	
 	var m TeamMember
 	if err := db.Where("team_id = ? AND user_id = ?", tid, uid).First(&m).Error; err != nil {
@@ -248,12 +314,18 @@ func applyToTeam(c *gin.Context) {
 	tid, _ := uuid.Parse(c.Param("id"))
 	var input struct { Message string `json:"message"` }
 	c.ShouldBindJSON(&input)
-	uid := c.MustGet("userID").(uint)
+	uid := c.MustGet("user_id").(uint)
 	uname := c.MustGet("username").(string)
 
 	var existing TeamMember
-	if err := db.Where("user_id = ?", uid).First(&existing).Error; err == nil {
-		c.JSON(400, gin.H{"error": "You already belong to a squad."})
+	if err := db.Where("team_id = ? AND user_id = ?", tid, uid).First(&existing).Error; err == nil {
+		c.JSON(400, gin.H{"error": "You already belong to this squad."})
+		return
+	}
+
+	var existingApp TeamApplication
+	if err := db.Where("team_id = ? AND user_id = ? AND status = ?", tid, uid, "pending").First(&existingApp).Error; err == nil {
+		c.JSON(400, gin.H{"error": "Application already pending for this squad."})
 		return
 	}
 
@@ -284,7 +356,7 @@ func createPost(c *gin.Context) {
 	tid, _ := uuid.Parse(c.Param("id"))
 	var input struct { Content string `json:"content" binding:"required"` }
 	c.ShouldBindJSON(&input)
-	uid := c.MustGet("userID").(uint)
+	uid := c.MustGet("user_id").(uint)
 	p := TeamPost{TeamID: tid, AuthorID: uid, Content: input.Content, CreatedAt: time.Now()}
 	db.Create(&p)
 	c.JSON(201, p)
@@ -300,7 +372,7 @@ func sendChatMessage(c *gin.Context) {
 	tid, _ := uuid.Parse(c.Param("id"))
 	var input struct { Content string `json:"content" binding:"required"` }
 	c.ShouldBindJSON(&input)
-	uid := c.MustGet("userID").(uint)
+	uid := c.MustGet("user_id").(uint)
 	uname := c.MustGet("username").(string)
 	msg := ChatMessage{TeamID: tid, UserID: uid, Username: uname, Content: input.Content, CreatedAt: time.Now()}
 	db.Create(&msg)

@@ -31,6 +31,10 @@ const Sidebar = () => {
     { name: "Teams", path: "/teams", icon: Users },
   ];
 
+  if (user) {
+    navItems.push({ name: "My Profile", path: `/player/${user.username}`, icon: Trophy });
+  }
+
   if (user?.is_admin) {
     navItems.push({ name: "Admin Panel", path: "/admin", icon: ShieldCheck });
   }

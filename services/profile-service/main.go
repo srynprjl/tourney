@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"net/http"
 	"os"
 	"time"
 
@@ -17,7 +19,16 @@ type Profile struct {
 	AvatarURL string    `json:"avatar_url"`
 	Location  string    `json:"location"`
 	Public    bool      `gorm:"default:true" json:"public"`
+	Awards    []Award   `gorm:"constraint:OnDelete:CASCADE;" json:"awards"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type Award struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	ProfileID   uint      `json:"profile_id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Date        time.Time `json:"date"`
 }
 
 type UserHistory struct {
@@ -51,37 +62,154 @@ func initDB() {
 		if err == nil { break }
 		time.Sleep(2 * time.Second)
 	}
-	db.AutoMigrate(&Profile{}, &UserHistory{}, &Report{})
+	db.AutoMigrate(&Profile{}, &UserHistory{}, &Report{}, &Award{})
 }
 
 func main() {
 	initDB()
 	r := gin.Default()
 
-	r.GET("/profiles/:username", getProfile)
-	r.PUT("/profiles/me", updateProfile)
-	r.POST("/reports", createReport)
-	
 	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "healthy"}) })
+
+	api := r.Group("/")
+	api.Use(authMiddleware())
+	{
+		api.GET("/profiles/:username", getProfile)
+		api.PUT("/profiles/me", updateProfile)
+		api.POST("/profiles/me/awards", addProfileAward)
+		api.DELETE("/profiles/me/awards/:id", deleteProfileAward)
+		api.GET("/profiles/:username/history", getProfileHistory)
+		api.POST("/reports", createReport)
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" { port = "8086" }
 	r.Run(":" + port)
 }
 
+func authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.AbortWithStatusJSON(401, gin.H{"error": "Unauthorized"})
+			return
+		}
+		authURL := os.Getenv("AUTH_SERVICE_URL")
+		if authURL == "" {
+			authURL = "http://auth-service:8081"
+		}
+		req, _ := http.NewRequest("GET", authURL+"/verify", nil)
+		req.Header.Set("Authorization", authHeader)
+		resp, err := (&http.Client{}).Do(req)
+		if err != nil || resp.StatusCode != 200 {
+			c.AbortWithStatusJSON(401, gin.H{"error": "Invalid token"})
+			return
+		}
+		var res struct {
+			UserID   float64 `json:"user_id"`
+			Username string  `json:"username"`
+			IsAdmin  bool    `json:"is_admin"`
+		}
+		json.NewDecoder(resp.Body).Decode(&res)
+		c.Set("user_id", uint(res.UserID))
+		c.Set("username", res.Username)
+		c.Set("is_admin", res.IsAdmin)
+		c.Next()
+	}
+}
+
 func getProfile(c *gin.Context) {
 	username := c.Param("username")
 	var p Profile
-	if err := db.Where("username = ?", username).First(&p).Error; err != nil {
+	if err := db.Preload("Awards").Where("username = ?", username).First(&p).Error; err != nil {
+		// If not found, check if it's the current user requesting their own profile
+		currUname, _ := c.Get("username")
+		currUID, _ := c.Get("user_id")
+
+		if currUname != nil && currUname.(string) == username {
+			p = Profile{
+				UserID:    currUID.(uint),
+				Username:  currUname.(string),
+				Bio:       "New recruit in the arena.",
+				Location:  "Global",
+				Public:    true,
+				CreatedAt: time.Now(),
+			}
+			db.Create(&p)
+			c.JSON(200, p)
+			return
+		}
+
 		c.JSON(404, gin.H{"error": "Profile not found"})
 		return
 	}
 	c.JSON(200, p)
 }
 
+func addProfileAward(c *gin.Context) {
+	uid := c.MustGet("user_id").(uint)
+	var p Profile
+	db.Where("user_id = ?", uid).First(&p)
+
+	var a Award
+	if err := c.ShouldBindJSON(&a); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	a.ProfileID = p.ID
+	a.Date = time.Now()
+	db.Create(&a)
+	c.JSON(201, a)
+}
+
+func deleteProfileAward(c *gin.Context) {
+	uid := c.MustGet("user_id").(uint)
+	id := c.Param("id")
+	var p Profile
+	db.Where("user_id = ?", uid).First(&p)
+
+	db.Delete(&Award{}, "id = ? AND profile_id = ?", id, p.ID)
+	c.JSON(200, gin.H{"message": "Award deleted"})
+}
+
+func getProfileHistory(c *gin.Context) {
+	username := c.Param("username")
+	var p Profile
+	if err := db.Where("username = ?", username).First(&p).Error; err != nil {
+		c.JSON(404, gin.H{"error": "Profile not found"})
+		return
+	}
+
+	var history []UserHistory
+	db.Where("user_id = ?", p.UserID).Order("date desc").Find(&history)
+	c.JSON(200, history)
+}
+
 func updateProfile(c *gin.Context) {
-	// Identity check would happen here via JWT
-	c.JSON(200, gin.H{"message": "Profile updated"})
+	// Identity check - using user_id from context (consistent with other services)
+	uidRaw, exists := c.Get("user_id")
+	if !exists {
+		// If not set by middleware, try to get from header manually for now if middleware isn't here
+		// But let's assume middleware will be added or we just use a simplified version for this task
+		c.JSON(401, gin.H{"error": "Unauthorized"})
+		return
+	}
+	uid := uidRaw.(uint)
+
+	var input map[string]interface{}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	var p Profile
+	if err := db.Where("user_id = ?", uid).First(&p).Error; err != nil {
+		c.JSON(404, gin.H{"error": "Profile not found"})
+		return
+	}
+
+	db.Model(&p).Updates(input)
+	c.JSON(200, p)
 }
 
 func createReport(c *gin.Context) {

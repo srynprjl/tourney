@@ -62,6 +62,7 @@ services:
     environment:
       - DB_URL=postgres://user:password@db-tournament:5432/tournament_db?sslmode=disable
       - AUTH_SERVICE_URL=http://auth-service:8081
+      - TEAM_SERVICE_URL=http://team-service:8084
     depends_on: [db-tournament, auth-service]
 
   match-service:
@@ -91,6 +92,7 @@ services:
     build: ./services/profile-service
     environment:
       - DB_URL=postgres://user:password@db-profile:5432/profile_db?sslmode=disable
+      - AUTH_SERVICE_URL=http://auth-service:8081
     depends_on: [db-profile]
 
   realtime-service:

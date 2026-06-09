@@ -38,6 +38,7 @@ type Match struct {
 	NextMatchID  *uuid.UUID   `gorm:"type:uuid" json:"next_match_id"`
 	TieID        *uuid.UUID   `gorm:"type:uuid" json:"tie_id"`
 	WinnerID     *uuid.UUID   `gorm:"type:uuid" json:"winner_id"`
+	Position     int          `gorm:"default:0" json:"position"`
 }
 
 type MatchEvent struct {
@@ -128,13 +129,15 @@ func authMiddleware() gin.HandlerFunc {
 		defer resp.Body.Close()
 
 		var res struct {
-			UserID float64 `json:"user_id"`
-			Role   string  `json:"role"`
+			UserID   float64 `json:"user_id"`
+			Username string  `json:"username"`
+			IsAdmin  bool    `json:"is_admin"`
 		}
 		json.NewDecoder(resp.Body).Decode(&res)
 
-		c.Set("userID", uint(res.UserID))
-		c.Set("role", res.Role)
+		c.Set("user_id", uint(res.UserID))
+		c.Set("username", res.Username)
+		c.Set("is_admin", res.IsAdmin)
 		c.Next()
 	}
 }
@@ -176,7 +179,7 @@ func updateScore(c *gin.Context) {
 	if tourneyURL == "" {
 		tourneyURL = "http://tournament-service:8082"
 	}
-	tReq, _ := http.NewRequest("GET", tourneyURL+"/"+match.TournamentID.String()+"/", nil)
+	tReq, _ := http.NewRequest("GET", tourneyURL+"/"+match.TournamentID.String(), nil)
 	tReq.Header.Set("Authorization", c.GetHeader("Authorization"))
 	tResp, err := (&http.Client{}).Do(tReq)
 
@@ -249,36 +252,10 @@ func performAdvance(match Match, winnerID uuid.UUID) {
 		return
 	}
 
-	var siblings []Match
-	db.Where("next_match_id = ? AND tournament_id = ?", *match.NextMatchID, match.TournamentID).Order("id asc").Find(&siblings)
-
-	if match.TieID != nil {
-		var distinctTies []uuid.UUID
-		tieToMatch := make(map[uuid.UUID]Match)
-		for _, s := range siblings {
-			if s.TieID != nil {
-				if _, ok := tieToMatch[*s.TieID]; !ok {
-					tieToMatch[*s.TieID] = s
-					distinctTies = append(distinctTies, *s.TieID)
-				}
-			}
-		}
-		for i, tie := range distinctTies {
-			if tie == *match.TieID {
-				if i == 0 {
-					nextMatch.Team1ID = winnerID
-				} else {
-					nextMatch.Team2ID = winnerID
-				}
-				break
-			}
-		}
+	if match.Position == 0 {
+		nextMatch.Team1ID = winnerID
 	} else {
-		if len(siblings) > 0 && siblings[0].ID == match.ID {
-			nextMatch.Team1ID = winnerID
-		} else {
-			nextMatch.Team2ID = winnerID
-		}
+		nextMatch.Team2ID = winnerID
 	}
 	db.Save(&nextMatch)
 }

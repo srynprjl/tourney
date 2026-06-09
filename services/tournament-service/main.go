@@ -34,6 +34,8 @@ type Tournament struct {
 	TeamsPerGroup  int            `gorm:"default:0" json:"teams_per_group"`
 	PromoteCount   int            `gorm:"default:0" json:"promote_count"`
 	JoinCode       string         `json:"join_code"`
+	StreamLink     string         `json:"stream_link"`
+	EntryFee       float64        `gorm:"default:0" json:"entry_fee"`
 	CreatorID      uint           `gorm:"not null" json:"creator_id"`
 	Teams          []Team         `gorm:"constraint:OnDelete:CASCADE;" json:"teams"`
 	Matches        []Match        `gorm:"constraint:OnDelete:CASCADE;" json:"matches"`
@@ -84,6 +86,7 @@ type TournamentRole struct {
 
 type Team struct {
 	ID           uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	SquadID      uuid.UUID `gorm:"type:uuid;index" json:"squad_id"`
 	Name         string    `gorm:"not null" json:"name"`
 	GroupName    string    `json:"group_name"`
 	TournamentID uuid.UUID `gorm:"type:uuid;not null;index" json:"tournament_id"`
@@ -103,6 +106,7 @@ type Match struct {
 	NextMatchID  *uuid.UUID `gorm:"type:uuid" json:"next_match_id"`
 	TieID        *uuid.UUID `gorm:"type:uuid" json:"tie_id"`
 	WinnerID     *uuid.UUID `gorm:"type:uuid" json:"winner_id"`
+	Position     int        `gorm:"default:0" json:"position"`
 }
 
 var db *gorm.DB
@@ -130,8 +134,10 @@ func main() {
 	{
 		api.GET("/", listTournaments)
 		api.POST("/", createTournament)
+		api.GET("/participating", getParticipatingTournaments)
 		
 		api.GET("/:id", getTournament)
+		api.GET("/by-code/:code", getTournamentByCode)
 		api.PUT("/:id", updateTournament)
 		api.DELETE("/:id", deleteTournament)
 		api.POST("/:id/news", addNews)
@@ -144,22 +150,39 @@ func main() {
 		api.POST("/:id/promote", promoteToKnockout)
 		api.GET("/:id/standings", getStandings)
 	}
-	r.Run(":8082")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8082"
+	}
+	r.Run(":" + port)
 }
 
 func authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" { c.AbortWithStatusJSON(401, gin.H{"error": "Unauthorized"}); return }
+		if authHeader == "" {
+			c.AbortWithStatusJSON(401, gin.H{"error": "Unauthorized"})
+			return
+		}
 		authURL := os.Getenv("AUTH_SERVICE_URL")
-		if authURL == "" { authURL = "http://auth-service:8081" }
+		if authURL == "" {
+			authURL = "http://auth-service:8081"
+		}
 		req, _ := http.NewRequest("GET", authURL+"/verify", nil)
 		req.Header.Set("Authorization", authHeader)
 		resp, err := (&http.Client{}).Do(req)
-		if err != nil || resp.StatusCode != 200 { c.AbortWithStatusJSON(401, gin.H{"error": "Invalid token"}); return }
-		var vr struct { UserID float64 `json:"user_id"`; IsAdmin bool `json:"is_admin"` }
+		if err != nil || resp.StatusCode != 200 {
+			c.AbortWithStatusJSON(401, gin.H{"error": "Invalid token"})
+			return
+		}
+		var vr struct {
+			UserID   float64 `json:"user_id"`
+			Username string  `json:"username"`
+			IsAdmin  bool    `json:"is_admin"`
+		}
 		json.NewDecoder(resp.Body).Decode(&vr)
 		c.Set("user_id", uint(vr.UserID))
+		c.Set("username", vr.Username)
 		c.Set("is_admin", vr.IsAdmin)
 		c.Next()
 	}
@@ -177,6 +200,8 @@ func createTournament(c *gin.Context) {
 		GroupCount int `json:"group_count"`
 		TeamsPerGroup int `json:"teams_per_group"`
 		PromoteCount int `json:"promote_count"`
+		StreamLink string `json:"stream_link"`
+		EntryFee float64 `json:"entry_fee"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -188,6 +213,7 @@ func createTournament(c *gin.Context) {
 		ID: uuid.New(), Name: input.Name, Type: input.Type, Sport: input.Sport, Mode: input.Mode, 
 		MaxTeams: input.MaxTeams, IsDouble: input.IsDouble, IsPublic: input.IsPublic, 
 		GroupCount: input.GroupCount, TeamsPerGroup: input.TeamsPerGroup, PromoteCount: input.PromoteCount, 
+		StreamLink: input.StreamLink, EntryFee: input.EntryFee,
 		CreatorID: uid, JoinCode: uuid.New().String()[:6], CreatedAt: time.Now(),
 	}
 	db.Create(&t)
@@ -209,6 +235,39 @@ func listTournaments(c *gin.Context) {
 	c.JSON(200, ts)
 }
 
+func getParticipatingTournaments(c *gin.Context) {
+	uidRaw, _ := c.Get("user_id")
+	uid := uidRaw.(uint)
+
+	// Fetch teams the user belongs to from team-service
+	teamURL := os.Getenv("TEAM_SERVICE_URL")
+	if teamURL == "" { teamURL = "http://team-service:8084" }
+	req, _ := http.NewRequest("GET", teamURL+"/my", nil)
+	req.Header.Set("Authorization", c.GetHeader("Authorization"))
+	resp, err := (&http.Client{}).Do(req)
+	
+	var myTeams []struct { ID uuid.UUID `json:"id"` }
+	if err == nil {
+		defer resp.Body.Close()
+		json.NewDecoder(resp.Body).Decode(&myTeams)
+	}
+
+	var teamIDs []uuid.UUID
+	for _, t := range myTeams { teamIDs = append(teamIDs, t.ID) }
+
+	var ts []Tournament
+	// Tournaments where I am the creator OR one of my teams is registered
+	query := db.Distinct("tournaments.*").Joins("LEFT JOIN teams ON teams.tournament_id = tournaments.id")
+	if len(teamIDs) > 0 {
+		query = query.Where("tournaments.creator_id = ? OR teams.id IN ?", uid, teamIDs)
+	} else {
+		query = query.Where("tournaments.creator_id = ?", uid)
+	}
+	query.Find(&ts)
+
+	c.JSON(200, ts)
+}
+
 func getTournament(c *gin.Context) {
 	var t Tournament
 	id := c.Param("id")
@@ -227,6 +286,16 @@ func getTournament(c *gin.Context) {
 		return
 	}
 	
+	c.JSON(200, t)
+}
+
+func getTournamentByCode(c *gin.Context) {
+	var t Tournament
+	code := c.Param("code")
+	if err := db.First(&t, "join_code = ?", code).Error; err != nil {
+		c.JSON(404, gin.H{"error": "Arena not found"})
+		return
+	}
 	c.JSON(200, t)
 }
 
@@ -260,16 +329,36 @@ func addSponsor(c *gin.Context) {
 }
 
 func addTeam(c *gin.Context) {
-	tid, _ := uuid.Parse(c.Param("id")); var t Team; c.ShouldBindJSON(&t); t.TournamentID = tid; t.ID = uuid.New(); db.Create(&t); c.JSON(201, t)
+	tid, _ := uuid.Parse(c.Param("id"))
+	var t Team
+	c.ShouldBindJSON(&t)
+	t.TournamentID = tid
+	t.ID = uuid.New()
+	t.SquadID = uuid.New() // Manual entry teams get a fresh SquadID
+	db.Create(&t)
+	c.JSON(201, t)
 }
 
 func registerTeam(c *gin.Context) {
 	tid, _ := uuid.Parse(c.Param("id"))
-	var input struct { TeamID uuid.UUID `json:"team_id"`; TeamName string `json:"team_name"`; JoinCode string `json:"join_code"` }
+	var input struct {
+		TeamID   uuid.UUID `json:"team_id"`
+		TeamName string    `json:"team_name"`
+		JoinCode string    `json:"join_code"`
+	}
 	c.ShouldBindJSON(&input)
-	var t Tournament; db.First(&t, "id = ?", tid)
-	if !t.IsPublic && t.JoinCode != input.JoinCode { c.JSON(403, gin.H{"error": "Invalid code"}); return }
-	db.Create(&Team{ID: input.TeamID, Name: input.TeamName, TournamentID: tid})
+	var t Tournament
+	db.First(&t, "id = ?", tid)
+	if !t.IsPublic && t.JoinCode != input.JoinCode {
+		c.JSON(403, gin.H{"error": "Invalid code"})
+		return
+	}
+	db.Create(&Team{
+		ID:           uuid.New(),
+		SquadID:      input.TeamID,
+		Name:         input.TeamName,
+		TournamentID: tid,
+	})
 	c.JSON(200, gin.H{"message": "Registered"})
 }
 
@@ -280,7 +369,9 @@ func getStandings(c *gin.Context) {
 
 func calculateGroupStandings(teams []Team, matches []Match, gn string) []Standing {
 	stMap := make(map[uuid.UUID]*Standing)
-	for _, tm := range teams { stMap[tm.ID] = &Standing{TeamID: tm.ID, TeamName: tm.Name, GroupName: tm.GroupName} }
+	for _, tm := range teams {
+		stMap[tm.SquadID] = &Standing{TeamID: tm.SquadID, TeamName: tm.Name, GroupName: tm.GroupName}
+	}
 	for _, m := range matches {
 		if !m.IsPlayed || m.Stage != 0 { continue }
 		if gn != "" && m.GroupName != gn { continue }
@@ -306,8 +397,8 @@ func generateTournament(c *gin.Context) {
 func generateGroupStage(t Tournament) {
 	db.Where("tournament_id = ?", t.ID).Delete(&Match{})
 	teams := t.Teams
-	rand.Seed(time.Now().UnixNano())
-	rand.Shuffle(len(teams), func(i, j int) { teams[i], teams[j] = teams[j], teams[i] })
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	r.Shuffle(len(teams), func(i, j int) { teams[i], teams[j] = teams[j], teams[i] })
 	if t.GroupCount > 1 {
 		for i := range teams {
 			gn := string(rune('A' + (i / t.TeamsPerGroup)))
@@ -334,17 +425,31 @@ func generateGroupStage(t Tournament) {
 }
 
 func buildRR(t Tournament, teams []Team, gn string) [][]Match {
-	n := len(teams); if n < 2 { return nil }
-	type Ref struct { ID uuid.UUID }; refs := make([]Ref, n); for i, tm := range teams { refs[i] = Ref{ID: tm.ID} }
-	if n%2 != 0 { refs = append(refs, Ref{ID: uuid.Nil}); n++ }
-	numR := n - 1; var rounds [][]Match
+	n := len(teams)
+	if n < 2 {
+		return nil
+	}
+	type Ref struct{ ID uuid.UUID }
+	refs := make([]Ref, n)
+	for i, tm := range teams {
+		refs[i] = Ref{ID: tm.SquadID}
+	}
+	if n%2 != 0 {
+		refs = append(refs, Ref{ID: uuid.Nil})
+		n++
+	}
+	numR := n - 1
+	var rounds [][]Match
 	for r := 0; r < numR; r++ {
 		var rd []Match
 		for i := 0; i < n/2; i++ {
 			t1, t2 := refs[i], refs[n-1-i]
-			if t1.ID != uuid.Nil && t2.ID != uuid.Nil { rd = append(rd, Match{ID: uuid.New(), TournamentID: t.ID, GroupName: gn, Team1ID: t1.ID, Team2ID: t2.ID, Stage: 0}) }
+			if t1.ID != uuid.Nil && t2.ID != uuid.Nil {
+				rd = append(rd, Match{ID: uuid.New(), TournamentID: t.ID, GroupName: gn, Team1ID: t1.ID, Team2ID: t2.ID, Stage: 0})
+			}
 		}
-		rounds = append(rounds, rd); refs = append([]Ref{refs[0], refs[n-1]}, refs[1:n-1]...)
+		rounds = append(rounds, rd)
+		refs = append([]Ref{refs[0], refs[n-1]}, refs[1:n-1]...)
 	}
 	if t.IsDouble {
 		var dr [][]Match
@@ -359,39 +464,98 @@ func buildRR(t Tournament, teams []Team, gn string) [][]Match {
 
 func generateKOFromTeams(t Tournament, teams []Team) {
 	db.Where("tournament_id = ? AND stage = 1", t.ID).Delete(&Match{})
-	n := len(teams); p := 1; for p*2 <= n { p *= 2 }
-	numR1 := n - p; var r1Ties [][]Match
+	n := len(teams)
+	p := 1
+	for p*2 <= n {
+		p *= 2
+	}
+	numR1 := n - p
+	var r1Ties [][]Match
 	for i := 0; i < numR1; i++ {
-		tid := uuid.New(); m1 := Match{ID: uuid.New(), TournamentID: t.ID, Round: 1, Stage: 1, Team1ID: teams[i*2].ID, Team2ID: teams[i*2+1].ID}
-		if t.IsDouble { m1.TieID = &tid }; db.Create(&m1); tie := []Match{m1}
-		if t.IsDouble { m2 := Match{ID: uuid.New(), TournamentID: t.ID, Round: 1, Stage: 1, TieID: &tid, Team1ID: m1.Team2ID, Team2ID: m1.Team1ID}; db.Create(&m2); tie = append(tie, m2) }
+		tid := uuid.New()
+		m1 := Match{ID: uuid.New(), TournamentID: t.ID, Round: 1, Stage: 1, Team1ID: teams[i*2].SquadID, Team2ID: teams[i*2+1].SquadID}
+		if t.IsDouble {
+			m1.TieID = &tid
+		}
+		db.Create(&m1)
+		tie := []Match{m1}
+		if t.IsDouble {
+			m2 := Match{ID: uuid.New(), TournamentID: t.ID, Round: 1, Stage: 1, TieID: &tid, Team1ID: m1.Team2ID, Team2ID: m1.Team1ID}
+			db.Create(&m2)
+			tie = append(tie, m2)
+		}
 		r1Ties = append(r1Ties, tie)
 	}
-	var allR [][][]Match; tmpP := p; rn := 2; if numR1 == 0 { rn = 1 }
+	var allR [][][]Match
+	tmpP := p
+	rn := 2
+	if numR1 == 0 {
+		rn = 1
+	}
 	for tmpP >= 2 {
-		var rts [][]Match; for i := 0; i < tmpP/2; i++ {
-			tid := uuid.New(); m1 := Match{ID: uuid.New(), TournamentID: t.ID, Round: rn, Stage: 1}
-			if t.IsDouble { m1.TieID = &tid }; db.Create(&m1); tie := []Match{m1}
-			if t.IsDouble { m2 := Match{ID: uuid.New(), TournamentID: t.ID, Round: rn, Stage: 1, TieID: &tid}; db.Create(&m2); tie = append(tie, m2) }
+		var rts [][]Match
+		for i := 0; i < tmpP/2; i++ {
+			tid := uuid.New()
+			m1 := Match{ID: uuid.New(), TournamentID: t.ID, Round: rn, Stage: 1}
+			if t.IsDouble {
+				m1.TieID = &tid
+			}
+			db.Create(&m1)
+			tie := []Match{m1}
+			if t.IsDouble {
+				m2 := Match{ID: uuid.New(), TournamentID: t.ID, Round: rn, Stage: 1, TieID: &tid}
+				db.Create(&m2)
+				tie = append(tie, m2)
+			}
 			rts = append(rts, tie)
 		}
-		allR = append(allR, rts); tmpP /= 2; rn++
+		allR = append(allR, rts)
+		tmpP /= 2
+		rn++
 	}
 	for r := 0; r < len(allR)-1; r++ {
 		for i, tie := range allR[r] {
-			nmid := allR[r+1][i/2][0].ID; for k := range tie { allR[r][i][k].NextMatchID = &nmid; db.Save(&allR[r][i][k]) }
+			nmid := allR[r+1][i/2][0].ID
+			pos := i % 2
+			for k := range tie {
+				allR[r][i][k].NextMatchID = &nmid
+				allR[r][i][k].Position = pos
+				db.Save(&allR[r][i][k])
+			}
 		}
 	}
 	if len(allR) > 0 {
-		fP2R := allR[0]; tIdx := numR1 * 2
+		fP2R := allR[0]
+		tIdx := numR1 * 2
 		for i := 0; i < numR1; i++ {
-			nmid := fP2R[i/2][0].ID; for j := range r1Ties[i] { r1Ties[i][j].NextMatchID = &nmid; db.Save(&r1Ties[i][j]) }
+			nmid := fP2R[i/2][0].ID
+			pos := i % 2
+			for j := range r1Ties[i] {
+				r1Ties[i][j].NextMatchID = &nmid
+				r1Ties[i][j].Position = pos
+				db.Save(&r1Ties[i][j])
+			}
 		}
 		nByes := p - numR1
 		for i := 0; i < nByes; i++ {
-			slIdx := numR1 + i; tTie := fP2R[slIdx/2]; tmID := teams[tIdx+i].ID
-			if slIdx % 2 == 0 { tTie[0].Team1ID = tmID; if t.IsDouble { tTie[1].Team2ID = tmID } } else { tTie[0].Team2ID = tmID; if t.IsDouble { tTie[1].Team1ID = tmID } }
-			db.Save(&tTie[0]); if t.IsDouble { db.Save(&tTie[1]) }
+			slIdx := numR1 + i
+			tTie := fP2R[slIdx/2]
+			tmID := teams[tIdx+i].SquadID
+			if slIdx%2 == 0 {
+				tTie[0].Team1ID = tmID
+				if t.IsDouble {
+					tTie[1].Team2ID = tmID
+				}
+			} else {
+				tTie[0].Team2ID = tmID
+				if t.IsDouble {
+					tTie[1].Team1ID = tmID
+				}
+			}
+			db.Save(&tTie[0])
+			if t.IsDouble {
+				db.Save(&tTie[1])
+			}
 		}
 	}
 }
@@ -404,7 +568,12 @@ func promoteToKnockout(c *gin.Context) {
 		gs := calculateGroupStandings(gts, t.Matches, gn)
 		sort.Slice(gs, func(i,j int) bool { if gs[i].Points != gs[j].Points { return gs[i].Points > gs[j].Points }; return gs[i].GD > gs[j].GD })
 		for i := 0; i < t.PromoteCount && i < len(gs); i++ {
-			for _, tm := range gts { if tm.ID == gs[i].TeamID { pts = append(pts, tm); break } }
+			for _, tm := range gts {
+				if tm.SquadID == gs[i].TeamID {
+					pts = append(pts, tm)
+					break
+				}
+			}
 		}
 	}
 	if len(pts) >= 2 { generateKOFromTeams(t, pts) }

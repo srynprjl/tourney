@@ -7,6 +7,7 @@ import MainLayout from '@/components/layout/MainLayout';
 // Pages
 import LoginPage from '@/pages/auth/LoginPage';
 import RegisterPage from '@/pages/auth/RegisterPage';
+import ApplicationPage from '@/pages/auth/ApplicationPage';
 import DashboardPage from '@/pages/dashboard/DashboardPage';
 import TournamentDetailsPage from '@/pages/tournament/TournamentDetailsPage';
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
@@ -24,6 +25,7 @@ function App() {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route path="/apply" element={<ApplicationPage />} />
               <Route path="/" element={<DashboardPage />} />
               <Route path="/tournament/:id" element={<TournamentDetailsPage />} />
               <Route path="/admin" element={<AdminDashboardPage />} />

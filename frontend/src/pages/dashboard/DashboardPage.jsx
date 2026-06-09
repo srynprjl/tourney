@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { 
   Plus, Trophy, Users, Calendar, Activity, 
   ChevronRight, Search, Filter, LayoutGrid, List,
-  ShieldCheck, Globe, Lock, Gamepad2, Settings2
+  ShieldCheck, Globe, Lock, Gamepad2, Settings2,
+  KeyRound
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
@@ -31,6 +32,8 @@ const DashboardPage = () => {
   const [activeTab, setActiveTab] = useState('all'); // 'all' or 'mine'
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [joinOpen, setJoinOpen] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
 
   // Form State
   const [formData, setFormData] = useState({
@@ -43,7 +46,8 @@ const DashboardPage = () => {
     is_double: false,
     group_count: 2,
     teams_per_group: 4,
-    promote_count: 2
+    promote_count: 2,
+    entry_fee: 0
   });
 
   useEffect(() => {
@@ -69,12 +73,23 @@ const DashboardPage = () => {
         max_teams: parseInt(formData.max_teams),
         group_count: parseInt(formData.group_count),
         teams_per_group: parseInt(formData.teams_per_group),
-        promote_count: parseInt(formData.promote_count)
+        promote_count: parseInt(formData.promote_count),
+        entry_fee: parseFloat(formData.entry_fee)
       });
       setOpen(false);
       fetchTournaments();
     } catch (err) {
       alert('Failed to create tournament');
+    }
+  };
+
+  const handleJoinByCode = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await api.get(`/tournaments/by-code/${joinCode}`);
+      navigate(`/tournament/${res.data.id}`);
+    } catch (err) {
+      alert("Arena not found or code invalid");
     }
   };
 
@@ -92,13 +107,37 @@ const DashboardPage = () => {
           <p className="text-primary font-black uppercase text-xs tracking-[0.4em]">Global Competition Deployment Hub</p>
         </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="lg" className="h-16 px-10 rounded-2xl font-black shadow-2xl shadow-primary/20 gap-3 group">
-              <Plus className="group-hover:rotate-90 transition-transform duration-300" /> 
-              INITIALIZE ARENA
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-4">
+          <Dialog open={joinOpen} onOpenChange={setJoinOpen}>
+            <DialogTrigger asChild>
+              <Button size="lg" variant="outline" className="h-16 px-10 rounded-2xl font-black border-primary/20 gap-3 shadow-xl">
+                <KeyRound size={18} /> JOIN BY CODE
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="rounded-[3rem] border-none shadow-2xl p-0 overflow-hidden max-w-md">
+               <DialogHeader className="bg-muted p-12">
+                  <DialogTitle className="text-3xl font-black uppercase italic tracking-tighter text-foreground">Secure Entry</DialogTitle>
+                  <DialogDescription className="font-bold uppercase text-[10px] tracking-widest mt-2 text-muted-foreground/60">Enter the authorized arena join code</DialogDescription>
+               </DialogHeader>
+               <form onSubmit={handleJoinByCode} className="p-12 space-y-8">
+                  <div className="space-y-2">
+                     <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Arena Vector Code</Label>
+                     <Input placeholder="E.g. X9F2B3" className="h-16 rounded-2xl font-black text-2xl tracking-[0.5em] text-center uppercase" value={joinCode} onChange={e => setJoinCode(e.target.value)} required />
+                  </div>
+                  <DialogFooter>
+                     <Button type="submit" className="w-full h-16 rounded-2xl font-black text-lg">VERIFY & ACCESS</Button>
+                  </DialogFooter>
+               </form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="lg" className="h-16 px-10 rounded-2xl font-black shadow-2xl shadow-primary/20 gap-3 group">
+                <Plus className="group-hover:rotate-90 transition-transform duration-300" /> 
+                INITIALIZE ARENA
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-3xl rounded-[3rem] p-0 border-none shadow-2xl overflow-hidden">
             <DialogHeader className="bg-primary p-12 text-primary-foreground">
                <DialogTitle className="text-4xl font-black uppercase italic tracking-tighter">Arena Configuration</DialogTitle>
@@ -150,6 +189,11 @@ const DashboardPage = () => {
                     <Input type="number" className="h-14 rounded-2xl font-black text-xl shadow-inner" value={formData.max_teams} onChange={e => setFormData({...formData, max_teams: e.target.value})} />
                   </div>
 
+                  <div className="space-y-2">
+                    <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Entry Fee (USD)</Label>
+                    <Input type="number" step="0.01" className="h-14 rounded-2xl font-black text-xl shadow-inner text-primary" value={formData.entry_fee} onChange={e => setFormData({...formData, entry_fee: e.target.value})} />
+                  </div>
+
                   {formData.type === 'group' && (
                      <>
                         <div className="space-y-2">
@@ -182,7 +226,8 @@ const DashboardPage = () => {
             </form>
           </DialogContent>
         </Dialog>
-      </header>
+        </div>
+        </header>
 
       <div className="flex flex-col md:flex-row gap-6 items-center justify-between bg-card/60 backdrop-blur-xl p-8 rounded-[3.5rem] border border-border/50 mx-4 shadow-xl">
          <div className="flex gap-2 bg-muted/40 p-1.5 rounded-[1.5rem] border border-border/40">

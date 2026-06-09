@@ -31,6 +31,7 @@ import {
   AlertCircle,
   Activity,
   Award,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -89,7 +90,9 @@ const TournamentDetailsPage = () => {
   const [prizeValue, setPrizeValue] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [selectedTeamId, setSelectedTeamId] = useState("");
+  const [hasPaid, setHasPaid] = useState(false);
   const [myTeams, setMyTeams] = useState([]);
+  const [streamUrl, setStreamUrl] = useState("");
 
   const wsMessage = useWebSocket(id);
 
@@ -97,6 +100,12 @@ const TournamentDetailsPage = () => {
     fetchTournament();
     fetchStandings();
   }, [id]);
+
+  useEffect(() => {
+    if (tournament?.stream_link) {
+      setStreamUrl(tournament.stream_link);
+    }
+  }, [tournament]);
 
   useEffect(() => {
     if (
@@ -147,8 +156,26 @@ const TournamentDetailsPage = () => {
     }
   };
 
+  const handlePay = async () => {
+    try {
+      const res = await api.post("/payment/stripe/pay", {
+        amount: tournament.entry_fee,
+        currency: "USD",
+      });
+      window.open(res.data.url, "_blank");
+      setHasPaid(true);
+      alert("Payment successful (Mock)! You can now complete registration.");
+    } catch (err) {
+      alert("Payment failed");
+    }
+  };
+
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (tournament.entry_fee > 0 && !hasPaid) {
+      alert("Please pay the entry fee first");
+      return;
+    }
     const team = myTeams.find((t) => t.id === selectedTeamId);
     if (!team) return;
     try {
@@ -238,7 +265,7 @@ const TournamentDetailsPage = () => {
 
   const isOwner =
     currentUser?.user_id === tournament.creator_id ||
-    currentUser?.role === "admin";
+    currentUser?.is_admin;
 
   const groupedMatches =
     tournament.matches?.reduce((acc, match) => {
@@ -272,7 +299,20 @@ const TournamentDetailsPage = () => {
     { id: "news", label: "Broadcasts", icon: Newspaper },
     { id: "info", label: "Intel", icon: ScrollText },
     { id: "live", label: "Live Stream", icon: Tv },
-  ];
+  ].filter((tab) => {
+    if (tab.id === "standings" && tournament?.type === "knockout") return false;
+    return true;
+  });
+
+  const handleUpdateStream = async () => {
+    try {
+      await api.put(`/tournaments/${id}`, { stream_link: streamUrl });
+      fetchTournament();
+      alert("Stream link updated");
+    } catch (err) {
+      alert("Failed to update stream");
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-10 pb-20">
@@ -429,11 +469,12 @@ const TournamentDetailsPage = () => {
                               )
                               .map((match) => {
                                 const t1 = tournament.teams.find(
-                                  (t) => t.id === match.team1_id,
+                                  (t) => t.squad_id === match.team1_id,
                                 );
                                 const t2 = tournament.teams.find(
-                                  (t) => t.id === match.team2_id,
+                                  (t) => t.squad_id === match.team2_id,
                                 );
+
                                 return (
                                   <Card
                                     key={match.id}
@@ -520,7 +561,7 @@ const TournamentDetailsPage = () => {
               .map((groupName) => (
                 <div key={groupName} className="space-y-6">
                   <h2 className="text-3xl font-black uppercase tracking-tighter italic flex items-center gap-4 pl-4">
-                    <div className="w-2 h-10 bg-primary rounded-full shadow-lg shadow-primary/30" />
+                    <div className="w-2 h-10 bg-primary rounded-full shadow-lg shadow-primary/20" />
                     {groupName === "Overall"
                       ? "Global Standings"
                       : `Sector ${groupName}`}
@@ -731,10 +772,45 @@ const TournamentDetailsPage = () => {
                         </div>
                       )}
 
+                      {tournament.entry_fee > 0 && (
+                        <div className="p-6 bg-primary/5 rounded-[2rem] border border-primary/20 space-y-4">
+                          <div className="flex justify-between items-center">
+                            <span className="font-black uppercase text-[10px] tracking-widest text-muted-foreground">
+                              Entry Fee Required
+                            </span>
+                            <span className="text-2xl font-black text-primary italic">
+                              ${tournament.entry_fee}
+                            </span>
+                          </div>
+                          <Button
+                            type="button"
+                            onClick={handlePay}
+                            disabled={hasPaid}
+                            className={cn(
+                              "w-full h-12 rounded-xl font-black transition-all",
+                              hasPaid
+                                ? "bg-green-500 hover:bg-green-600 shadow-green-500/20"
+                                : "shadow-primary/20",
+                            )}
+                          >
+                            {hasPaid ? (
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck size={18} /> FEE VERIFIED
+                              </div>
+                            ) : (
+                              "PAY ENTRY FEE"
+                            )}
+                          </Button>
+                        </div>
+                      )}
+
                       <DialogFooter>
                         <Button
                           type="submit"
-                          disabled={!selectedTeamId}
+                          disabled={
+                            !selectedTeamId ||
+                            (tournament.entry_fee > 0 && !hasPaid)
+                          }
                           className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20"
                         >
                           CONFIRM REGISTRATION
@@ -774,7 +850,7 @@ const TournamentDetailsPage = () => {
                         asChild
                         className="rounded-xl font-bold border-primary/20 text-primary flex-1"
                       >
-                        <Link to={`/team/${t.id}`}>
+                        <Link to={`/team/${t.squad_id}`}>
                           INTEL <ChevronRight size={14} className="ml-1" />
                         </Link>
                       </Button>
@@ -1077,22 +1153,78 @@ const TournamentDetailsPage = () => {
 
         {activeTab === "live" && (
           <div className="max-w-5xl mx-auto space-y-12">
-            <Card className="aspect-video bg-[#050505] rounded-[4rem] overflow-hidden flex items-center justify-center border-[12px] border-card shadow-2xl relative group">
-              <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-transparent opacity-40 group-hover:opacity-60 transition-opacity" />
-              <div className="text-center space-y-8 relative z-10">
-                <div className="w-32 h-32 bg-red-600 rounded-[2.5rem] flex items-center justify-center mx-auto animate-pulse shadow-[0_0_50px_rgba(220,38,38,0.5)] transform rotate-6 hover:rotate-0 transition-transform duration-500">
-                  <Tv className="text-white w-16 h-16" />
+            {isOwner && (
+              <Card className="rounded-[2.5rem] border-none shadow-xl p-8 bg-card">
+                <div className="flex gap-4 items-end">
+                  <div className="flex-1 space-y-2">
+                    <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground ml-1">
+                      Satellite Feed URL (Live Stream Link)
+                    </Label>
+                    <Input
+                      placeholder="E.g. https://youtube.com/live/..."
+                      className="h-14 rounded-2xl font-black"
+                      value={streamUrl}
+                      onChange={(e) => setStreamUrl(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    onClick={handleUpdateStream}
+                    className="h-14 px-8 rounded-2xl font-black shadow-lg shadow-primary/20"
+                  >
+                    LINK SIGNAL
+                  </Button>
                 </div>
-                <div>
-                  <p className="text-white font-black text-5xl uppercase tracking-tighter italic shadow-2xl">
-                    Signal Lost
-                  </p>
-                  <p className="text-red-500/60 font-black uppercase text-xs tracking-[0.5em] mt-4">
-                    Awaiting Satellite Feed ...
-                  </p>
+              </Card>
+            )}
+
+            {tournament.stream_link ? (
+              <Card className="aspect-video bg-black rounded-[4rem] overflow-hidden border-[12px] border-card shadow-2xl relative group">
+                {tournament.stream_link.includes("youtube.com") ||
+                tournament.stream_link.includes("youtu.be") ? (
+                  <iframe
+                    className="w-full h-full"
+                    src={tournament.stream_link.replace("watch?v=", "embed/")}
+                    title="Live Stream"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  ></iframe>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center space-y-6">
+                    <Tv size={64} className="text-primary animate-pulse" />
+                    <p className="text-2xl font-black uppercase italic tracking-tighter">
+                      External Signal Detected
+                    </p>
+                    <Button asChild size="lg" className="rounded-2xl font-black">
+                      <a
+                        href={tournament.stream_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        OPEN SATELLITE FEED <ExternalLink className="ml-2" />
+                      </a>
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            ) : (
+              <Card className="aspect-video bg-[#050505] rounded-[4rem] overflow-hidden flex items-center justify-center border-[12px] border-card shadow-2xl relative group">
+                <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-transparent opacity-40 group-hover:opacity-60 transition-opacity" />
+                <div className="text-center space-y-8 relative z-10">
+                  <div className="w-32 h-32 bg-red-600 rounded-[2.5rem] flex items-center justify-center mx-auto animate-pulse shadow-[0_0_50px_rgba(220,38,38,0.5)] transform rotate-6 hover:rotate-0 transition-transform duration-500">
+                    <Tv className="text-white w-16 h-16" />
+                  </div>
+                  <div>
+                    <p className="text-white font-black text-5xl uppercase tracking-tighter italic shadow-2xl">
+                      Signal Lost
+                    </p>
+                    <p className="text-red-500/60 font-black uppercase text-xs tracking-[0.5em] mt-4">
+                      Awaiting Satellite Feed ...
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </Card>
+              </Card>
+            )}
           </div>
         )}
       </div>
