@@ -13,7 +13,6 @@ import TournamentDetailsPage from '@/pages/tournament/TournamentDetailsPage';
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
 import TeamsListPage from '@/pages/team/TeamsListPage';
 import TeamDashboardPage from '@/pages/team/TeamDashboardPage';
-import MatchOfficiatingPage from '@/pages/match/MatchOfficiatingPage';
 import PublicProfilePage from '@/pages/profile/PublicProfilePage';
 
 function App() {
@@ -31,7 +30,6 @@ function App() {
               <Route path="/admin" element={<AdminDashboardPage />} />
               <Route path="/teams" element={<TeamsListPage />} />
               <Route path="/team/:id" element={<TeamDashboardPage />} />
-              <Route path="/match/:id" element={<MatchOfficiatingPage />} />
               <Route path="/player/:username" element={<PublicProfilePage />} />
             </Routes>
           </MainLayout>
@@ -40,5 +38,6 @@ function App() {
     </AuthProvider>
   );
 }
+
 
 export default App;

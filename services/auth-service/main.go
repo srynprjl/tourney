@@ -124,7 +124,6 @@ func main() {
 	r.POST("/register", register)
 	r.POST("/login", login)
 	r.GET("/verify", verifyToken)
-	r.POST("/apply", apply)
 	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "healthy"}) })
 
 	// Admin endpoints
@@ -136,8 +135,6 @@ func main() {
 		adminGroup.PUT("/users/:id/toggle-admin", toggleAdmin)
 		adminGroup.PUT("/users/:id/toggle-ban", toggleBan)
 		adminGroup.GET("/stats", getStats)
-		adminGroup.GET("/applications", listApplications)
-		adminGroup.PUT("/applications/:id", handleApplication)
 	}
 
 	port := os.Getenv("PORT")
@@ -321,82 +318,33 @@ func getStats(c *gin.Context) {
 	})
 }
 
-func apply(c *gin.Context) {
-	var input struct {
-		Username string `json:"username" binding:"required"`
-		Password string `json:"password" binding:"required"`
-		Email    string `json:"email" binding:"required"`
-		Reason   string `json:"reason" binding:"required"`
-	}
+// d
+// 	var existing Application
+// 	if err := db.Where("username = ? OR email = ?", input.Username, input.Email).First(&existing).Error; err == nil {
+// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Application already submitted for this username or email"})
+// 		return
+// 	}
 
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+// 	// Check if user already exists
+// 	var existingUser User
+// 	if err := db.Where("username = ?", input.Username).First(&existingUser).Error; err == nil {
+// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Username already taken"})
+// 		return
+// 	}
 
-	var existing Application
-	if err := db.Where("username = ? OR email = ?", input.Username, input.Email).First(&existing).Error; err == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Application already submitted for this username or email"})
-		return
-	}
+// 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+// 	app := Application{
+// 		Username:  input.Username,
+// 		Password:  string(hashedPassword),
+// 		Email:     input.Email,
+// 		Reason:    input.Reason,
+// 		CreatedAt: time.Now(),
+// 	}
 
-	// Check if user already exists
-	var existingUser User
-	if err := db.Where("username = ?", input.Username).First(&existingUser).Error; err == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Username already taken"})
-		return
-	}
+// 	if err := db.Create(&app).Error; err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit application"})
+// 		return
+// 	}
 
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
-	app := Application{
-		Username:  input.Username,
-		Password:  string(hashedPassword),
-		Email:     input.Email,
-		Reason:    input.Reason,
-		CreatedAt: time.Now(),
-	}
-
-	if err := db.Create(&app).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit application"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{"message": "Application submitted successfully"})
-}
-
-func listApplications(c *gin.Context) {
-	var apps []Application
-	db.Find(&apps)
-	c.JSON(http.StatusOK, apps)
-}
-
-func handleApplication(c *gin.Context) {
-	id := c.Param("id")
-	var input struct {
-		Status string `json:"status" binding:"required"` // approved, rejected
-	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	var app Application
-	if err := db.First(&app, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Application not found"})
-		return
-	}
-
-	app.Status = input.Status
-	db.Save(&app)
-
-	if input.Status == "approved" {
-		user := User{
-			Username: app.Username,
-			Password: app.Password,
-		}
-		db.Create(&user)
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Application " + input.Status})
-}
-
+// 	c.JSON(http.StatusCreated, gin.H{"message": "Application submitted successfully"})
+// }

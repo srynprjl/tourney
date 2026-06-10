@@ -63,6 +63,7 @@ services:
       - DB_URL=postgres://user:password@db-tournament:5432/tournament_db?sslmode=disable
       - AUTH_SERVICE_URL=http://auth-service:8081
       - TEAM_SERVICE_URL=http://team-service:8084
+      - MATCH_SERVICE_URL=http://match-service:8083
     depends_on: [db-tournament, auth-service]
 
   match-service:

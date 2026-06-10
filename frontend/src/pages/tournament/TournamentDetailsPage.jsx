@@ -80,6 +80,7 @@ const TournamentDetailsPage = () => {
   const [registerModalOpen, setRegisterModalOpen] = useState(false);
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
   const [prizeModalOpen, setPrizeModalOpen] = useState(false);
+  const [scoreModalOpen, setScoreModalOpen] = useState(false);
 
   // Form states
   const [teamName, setTeamName] = useState("");
@@ -93,6 +94,10 @@ const TournamentDetailsPage = () => {
   const [hasPaid, setHasPaid] = useState(false);
   const [myTeams, setMyTeams] = useState([]);
   const [streamUrl, setStreamUrl] = useState("");
+
+  const [editingMatch, setEditingMatch] = useState(null);
+  const [editScore1, setEditScore1] = useState(0);
+  const [editScore2, setEditScore2] = useState(0);
 
   const wsMessage = useWebSocket(id);
 
@@ -135,6 +140,24 @@ const TournamentDetailsPage = () => {
     }
   };
 
+  const handleUpdateScore = async (e) => {
+    e.preventDefault();
+    try {
+      const s1 = parseInt(editScore1) || 0;
+      const s2 = parseInt(editScore2) || 0;
+      await api.put(`/matches/${editingMatch.id}/score`, {
+        team1_score: s1,
+        team2_score: s2,
+      });
+      setScoreModalOpen(false);
+      fetchTournament();
+      fetchStandings();
+    } catch (err) {
+      console.error("Score Update Error:", err.response?.data || err.message);
+      alert(`Failed to update score: ${err.response?.data?.error || err.message}`);
+    }
+  };
+
   const fetchMyTeams = async () => {
     try {
       const res = await teamService.listMy();
@@ -152,7 +175,17 @@ const TournamentDetailsPage = () => {
       setTeamModalOpen(false);
       fetchTournament();
     } catch (err) {
-      alert("Failed to add team");
+      alert(err.response?.data?.error || "Failed to add team");
+    }
+  };
+
+  const handleRemoveTeam = async (teamId) => {
+    if (!window.confirm("Remove this squad from the tournament?")) return;
+    try {
+      await api.delete(`/tournaments/${id}/teams/${teamId}`);
+      fetchTournament();
+    } catch (err) {
+      alert("Failed to remove squad");
     }
   };
 
@@ -235,6 +268,36 @@ const TournamentDetailsPage = () => {
     }
   };
 
+  const handleDeletePrize = async (prizeId) => {
+    if (!window.confirm("Delete this prize?")) return;
+    try {
+      await api.delete(`/tournaments/${id}/prizes/${prizeId}`);
+      fetchTournament();
+    } catch (err) {
+      alert("Failed to delete prize");
+    }
+  };
+
+  const handleDeleteRule = async (ruleId) => {
+    if (!window.confirm("Delete this rule?")) return;
+    try {
+      await api.delete(`/tournaments/${id}/rules/${ruleId}`);
+      fetchTournament();
+    } catch (err) {
+      alert("Failed to delete rule");
+    }
+  };
+
+  const handleDeleteNews = async (newsId) => {
+    if (!window.confirm("Delete this broadcast?")) return;
+    try {
+      await api.delete(`/tournaments/${id}/news/${newsId}`);
+      fetchTournament();
+    } catch (err) {
+      alert("Failed to delete broadcast");
+    }
+  };
+
   const generate = async () => {
     try {
       await api.post(`/tournaments/${id}/generate`);
@@ -242,6 +305,16 @@ const TournamentDetailsPage = () => {
       fetchStandings();
     } catch (err) {
       alert("Generation failed");
+    }
+  };
+
+  const handleDeleteTournament = async () => {
+    if (!window.confirm("ARE YOU ABSOLUTELY SURE? This will PERMANENTLY delete the arena and all matches/data.")) return;
+    try {
+      await api.delete(`/tournaments/${id}`);
+      navigate("/");
+    } catch (err) {
+      alert("Deletion failed");
     }
   };
 
@@ -365,6 +438,13 @@ const TournamentDetailsPage = () => {
 
         {isOwner && (
           <div className="flex gap-3">
+            <Button
+              onClick={handleDeleteTournament}
+              variant="ghost"
+              className="h-14 w-14 rounded-2xl text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 size={24} />
+            </Button>
             {tournament.type === "group" && tournament.matches?.length > 0 && (
               <Button
                 onClick={promote}
@@ -478,10 +558,22 @@ const TournamentDetailsPage = () => {
                                 return (
                                   <Card
                                     key={match.id}
-                                    className="group relative overflow-hidden rounded-[2.5rem] border-none shadow-xl hover:shadow-2xl transition-all duration-500 bg-card"
+                                    className={cn(
+                                      "group relative overflow-hidden rounded-[2.5rem] border-none shadow-xl hover:shadow-2xl transition-all duration-500 bg-card",
+                                      isOwner && "cursor-pointer active:scale-95"
+                                    )}
+                                    onClick={() => {
+                                      if (isOwner) {
+                                        setEditingMatch(match);
+                                        setEditScore1(match.team1_score);
+                                        setEditScore2(match.team2_score);
+                                        setScoreModalOpen(true);
+                                      }
+                                    }}
                                   >
                                     <div className="absolute top-0 left-0 w-full h-1.5 bg-primary/10 group-hover:bg-primary transition-colors" />
                                     <CardContent className="p-10 flex flex-col gap-8">
+
                                       <div className="space-y-6">
                                         <div className="flex justify-between items-center">
                                           <span
@@ -529,17 +621,6 @@ const TournamentDetailsPage = () => {
                                           {match.group_name &&
                                             `• SEC ${match.group_name}`}
                                         </Badge>
-                                        {isOwner && (
-                                          <Button
-                                            asChild
-                                            size="sm"
-                                            className="rounded-xl font-black gap-2 shadow-lg shadow-primary/20 transform hover:-translate-y-0.5 transition-all h-10 px-6"
-                                          >
-                                            <Link to={`/match/${match.id}`}>
-                                              <Gavel size={14} /> OFFICIATE
-                                            </Link>
-                                          </Button>
-                                        )}
                                       </div>
                                     </CardContent>
                                   </Card>
@@ -550,10 +631,61 @@ const TournamentDetailsPage = () => {
                       ))}
                   </div>
                 ))
-            )}
-          </div>
-        )}
+                )}
 
+                {/* Score Update Dialog */}
+                <Dialog open={scoreModalOpen} onOpenChange={setScoreModalOpen}>
+                <DialogContent className="rounded-[2.5rem] border-none shadow-2xl p-0 overflow-hidden max-w-lg">
+                <DialogHeader className="bg-primary p-10 text-primary-foreground">
+                  <DialogTitle className="text-3xl font-black uppercase italic tracking-tighter">
+                    Update Score
+                  </DialogTitle>
+                  <DialogDescription className="text-primary-foreground/70 font-bold uppercase text-[10px] tracking-widest mt-2">
+                    Manually override match results
+                  </DialogDescription>
+                </DialogHeader>
+                {editingMatch && (
+                  <form onSubmit={handleUpdateScore} className="p-10 space-y-10">
+                    <div className="grid grid-cols-2 gap-8">
+                      <div className="space-y-4">
+                        <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground block text-center">
+                          {tournament.teams.find(t => t.squad_id === editingMatch.team1_id)?.name || 'Team 1'}
+                        </Label>
+                        <Input
+                          type="number"
+                          className="h-20 rounded-2xl font-black text-4xl text-center shadow-inner"
+                          value={editScore1}
+                          onChange={(e) => setEditScore1(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-4">
+                        <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground block text-center">
+                          {tournament.teams.find(t => t.squad_id === editingMatch.team2_id)?.name || 'Team 2'}
+                        </Label>
+                        <Input
+                          type="number"
+                          className="h-20 rounded-2xl font-black text-4xl text-center shadow-inner"
+                          value={editScore2}
+                          onChange={(e) => setEditScore2(e.target.value)}
+                          required
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        type="submit"
+                        className="w-full h-16 rounded-2xl font-black text-xl shadow-xl shadow-primary/20"
+                      >
+                        FINALIZE SCORE
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                )}
+                </DialogContent>
+                </Dialog>
+                </div>
+                )}
         {activeTab === "standings" && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-6xl mx-auto">
             {Object.keys(groupedStandings)
@@ -844,23 +976,29 @@ const TournamentDetailsPage = () => {
                       </Badge>
                     </div>
                     <div className="flex gap-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        asChild
-                        className="rounded-xl font-bold border-primary/20 text-primary flex-1"
-                      >
-                        <Link to={`/team/${t.squad_id}`}>
-                          INTEL <ChevronRight size={14} className="ml-1" />
-                        </Link>
-                      </Button>
+                      {!t.is_manual && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          asChild
+                          className="rounded-xl font-bold border-primary/20 text-primary flex-1"
+                        >
+                          <Link to={`/team/${t.squad_id}`}>
+                            INTEL <ChevronRight size={14} className="ml-1" />
+                          </Link>
+                        </Button>
+                      )}
                       {isOwner && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="w-10 h-10 p-0 text-destructive hover:bg-destructive/10 rounded-xl"
+                          onClick={() => handleRemoveTeam(t.id)}
+                          className={cn(
+                            "w-10 h-10 p-0 text-destructive hover:bg-destructive/10 rounded-xl",
+                            t.is_manual && "flex-1 w-full h-11"
+                          )}
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={16} /> {t.is_manual && <span className="ml-2 font-bold uppercase text-[10px]">Remove Squad</span>}
                         </Button>
                       )}
                     </div>
@@ -957,9 +1095,21 @@ const TournamentDetailsPage = () => {
                         <h3 className="text-3xl font-black tracking-tighter uppercase italic">
                           {n.title}
                         </h3>
-                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em]">
-                          {new Date(n.created_at).toLocaleDateString()}
-                        </span>
+                        <div className="flex items-center gap-4">
+                          <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em]">
+                            {new Date(n.created_at).toLocaleDateString()}
+                          </span>
+                          {isOwner && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => handleDeleteNews(n.id)}
+                              className="w-8 h-8 text-destructive hover:bg-destructive/10 rounded-lg"
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          )}
+                        </div>
                       </div>
                       <p className="text-muted-foreground font-bold text-lg leading-relaxed">
                         {n.content}
@@ -1066,6 +1216,16 @@ const TournamentDetailsPage = () => {
                     <span className="font-black text-3xl text-primary tracking-tighter italic">
                       {p.value}
                     </span>
+                    {isOwner && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeletePrize(p.id)}
+                        className="absolute top-2 right-2 w-8 h-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity rounded-lg"
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    )}
                   </div>
                 ))}
                 {tournament.prizes_list?.length === 0 && (
@@ -1132,13 +1292,23 @@ const TournamentDetailsPage = () => {
               </div>
               <div className="bg-card rounded-[3.5rem] p-12 space-y-8 shadow-2xl border-none">
                 {tournament.rules_list?.map((r, idx) => (
-                  <div key={r.id} className="flex gap-6 group">
+                  <div key={r.id} className="flex gap-6 group relative">
                     <div className="w-8 h-8 bg-primary/20 text-primary font-black rounded-2xl flex items-center justify-center text-xs shrink-0 group-hover:scale-110 transition-transform shadow-lg">
                       {idx + 1}
                     </div>
-                    <p className="font-bold text-gray-700 dark:text-gray-300 leading-relaxed text-lg italic uppercase tracking-tight">
+                    <p className="font-bold text-gray-700 dark:text-gray-300 leading-relaxed text-lg italic uppercase tracking-tight flex-1">
                       {r.content}
                     </p>
+                    {isOwner && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteRule(r.id)}
+                        className="w-8 h-8 text-destructive hover:bg-destructive/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    )}
                   </div>
                 ))}
                 {tournament.rules_list?.length === 0 && (
@@ -1148,8 +1318,8 @@ const TournamentDetailsPage = () => {
                 )}
               </div>
             </section>
-          </div>
-        )}
+            </div>
+            )}
 
         {activeTab === "live" && (
           <div className="max-w-5xl mx-auto space-y-12">
@@ -1227,9 +1397,10 @@ const TournamentDetailsPage = () => {
             )}
           </div>
         )}
-      </div>
-    </div>
-  );
-};
+            </div>
+            </div>
+            );
+            };
 
-export default TournamentDetailsPage;
+            export default TournamentDetailsPage;
+

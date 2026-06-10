@@ -135,6 +135,7 @@ func main() {
 		api.GET("/:id", getTeam)
 		api.DELETE("/:id", deleteTeam)
 		api.DELETE("/:id/leave", leaveTeam)
+		api.DELETE("/:id/members/:userId", removeMember)
 		api.POST("/:id/apply", applyToTeam)
 		api.GET("/:id/applications", getApplications)
 		api.PUT("/:id/applications/:appId", handleApplication)
@@ -308,6 +309,22 @@ func leaveTeam(c *gin.Context) {
 
 	db.Delete(&m)
 	c.JSON(200, gin.H{"message": "Squad Left"})
+}
+
+func removeMember(c *gin.Context) {
+	tid, _ := uuid.Parse(c.Param("id"))
+	targetUid := c.Param("userId")
+	uid := c.MustGet("user_id").(uint)
+
+	var t Team
+	db.First(&t, "id = ?", tid)
+	if t.OwnerID != uid {
+		c.JSON(403, gin.H{"error": "Only owners can remove members"})
+		return
+	}
+
+	db.Where("team_id = ? AND user_id = ?", tid, targetUid).Delete(&TeamMember{})
+	c.JSON(200, gin.H{"message": "Member removed"})
 }
 
 func applyToTeam(c *gin.Context) {

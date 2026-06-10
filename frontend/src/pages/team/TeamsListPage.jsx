@@ -84,14 +84,23 @@ const TeamsListPage = () => {
     }
   };
 
-  const handleLeave = async (teamId) => {
-    if (!window.confirm('Are you sure you want to leave/disband this squad?')) return;
+  const handleLeave = async (team) => {
+    const isOwner = team.owner_id === user?.user_id || user?.is_admin;
+    const msg = isOwner 
+      ? 'Are you sure you want to DISBAND this squad? All data will be lost.' 
+      : 'Are you sure you want to LEAVE this squad?';
+      
+    if (!window.confirm(msg)) return;
+    
     try {
-      // Note: teamService doesn't have leave yet, adding it or using api
-      await teamService.leave(teamId);
+      if (isOwner) {
+        await teamService.disband(team.id);
+      } else {
+        await teamService.leave(team.id);
+      }
       fetchData();
     } catch (err) {
-      alert('Failed to leave squad');
+      alert(err.response?.data?.error || 'Action failed');
     }
   };
 
@@ -116,8 +125,8 @@ const TeamsListPage = () => {
                        ENTER SQUAD HUD <ArrowRight className="group-hover:translate-x-1 transition-transform" />
                     </Link>
                  </Button>
-                 <Button onClick={() => handleLeave(myTeams[0].id)} variant="ghost" size="lg" className="h-16 px-6 rounded-2xl font-black text-red-500 hover:bg-red-500/10 gap-3">
-                    <LogOut size={18} /> LEAVE
+                 <Button onClick={() => handleLeave(myTeams[0])} variant="ghost" size="lg" className="h-16 px-6 rounded-2xl font-black text-red-500 hover:bg-red-500/10 gap-3">
+                    <LogOut size={18} /> {myTeams[0].owner_id === user?.user_id ? 'DISBAND' : 'LEAVE'}
                  </Button>
               </div>
            ) : (

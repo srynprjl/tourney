@@ -18,6 +18,8 @@ import {
   X,
   Plus,
   Activity,
+  Trash2,
+  Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -59,6 +61,7 @@ const PublicProfilePage = () => {
   const { user: currentUser } = useAuth();
   const [profile, setProfile] = useState(null);
   const [history, setHistory] = useState([]);
+  const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Edit states
@@ -69,9 +72,13 @@ const PublicProfilePage = () => {
   const [awardModalOpen, setAwardModalOpen] = useState(false);
   const [newAward, setNewAward] = useState({ title: "", description: "" });
 
+  // Comment state
+  const [newComment, setNewComment] = useState("");
+
   useEffect(() => {
     fetchProfile();
     fetchHistory();
+    fetchComments();
   }, [username]);
 
   const fetchProfile = async () => {
@@ -91,12 +98,43 @@ const PublicProfilePage = () => {
 
   const fetchHistory = async () => {
     try {
-      // Check if this is the current user's profile to use the new "participating" endpoint
-      // Otherwise use a general history endpoint if we had one (for now we use the mock/new one)
       const res = await api.get("/tournaments/participating");
       setHistory(res.data || []);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const fetchComments = async () => {
+    try {
+      const res = await api.get(`/profile/profiles/${username}/comments`);
+      setComments(res.data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handlePostComment = async (e) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+    try {
+      await api.post(`/profile/profiles/${username}/comments`, {
+        content: newComment,
+      });
+      setNewComment("");
+      fetchComments();
+    } catch (err) {
+      alert("Failed to post comment");
+    }
+  };
+
+  const handleDeleteComment = async (id) => {
+    if (!window.confirm("Delete this comment?")) return;
+    try {
+      await api.delete(`/profile/comments/${id}`);
+      fetchComments();
+    } catch (err) {
+      alert("Failed to delete comment");
     }
   };
 
@@ -231,34 +269,6 @@ const PublicProfilePage = () => {
                     "No biography provided. This player prefers to let their results speak for themselves."}
                 </p>
               )}
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-[2.5rem] shadow-xl border-border/50 bg-primary/5">
-            <CardHeader>
-              <CardTitle className="text-xl font-black uppercase tracking-tight italic">
-                Ecosystem Standing
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-muted-foreground">
-                  Approx. Winnings
-                </span>
-                <span className="text-2xl font-black text-primary">$4,250</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-muted-foreground">
-                  Tournaments
-                </span>
-                <span className="text-2xl font-black">12</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-muted-foreground">
-                  Global Rank
-                </span>
-                <Badge className="font-black">TOP 5%</Badge>
-              </div>
             </CardContent>
           </Card>
         </div>
@@ -458,28 +468,75 @@ const PublicProfilePage = () => {
               </div>
               Community Feed
             </h2>
-            <div className="space-y-6">
-              <Card className="border-none shadow-sm bg-card/60 rounded-3xl p-8">
-                <p className="font-medium leading-relaxed italic text-gray-700 dark:text-gray-300">
-                  "Just signed with The Warriors for the upcoming Summer Cup.
-                  Can't wait to hit the pitch and defend our title! See you all
-                  there. #SquadGoals #ProLeague"
-                </p>
-                <div className="flex justify-between items-center mt-6">
-                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">
-                    Posted 4 days ago
-                  </span>
-                  <div className="flex gap-4">
+            <div className="space-y-8">
+              <Card className="rounded-[2.5rem] border-none shadow-xl bg-card p-8">
+                <form onSubmit={handlePostComment} className="space-y-4">
+                  <textarea
+                    className="w-full min-h-[100px] p-6 bg-muted/30 rounded-[2rem] border-none outline-none focus:ring-2 focus:ring-primary font-medium text-base italic"
+                    placeholder="Leave a message on this player's wall..."
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                  />
+                  <div className="flex justify-end">
                     <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-2 text-muted-foreground hover:text-primary"
+                      type="submit"
+                      className="rounded-2xl font-black px-8 gap-2 shadow-lg shadow-primary/20"
                     >
-                      <Share2 size={14} /> Share
+                      <Send size={16} /> BROADCAST
                     </Button>
                   </div>
-                </div>
+                </form>
               </Card>
+
+              <div className="space-y-6">
+                {comments.map((comment) => (
+                  <Card
+                    key={comment.id}
+                    className="border-none shadow-sm bg-card/60 rounded-[2.5rem] p-8 group relative"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-xs">
+                          {comment.author[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <Link
+                            to={`/player/${comment.author}`}
+                            className="font-black uppercase text-sm hover:text-primary transition-colors"
+                          >
+                            {comment.author}
+                          </Link>
+                          <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">
+                            {new Date(comment.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      {(currentUser?.username === comment.author ||
+                        isOwnProfile ||
+                        currentUser?.is_admin) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteComment(comment.id)}
+                          className="text-destructive opacity-0 group-hover:opacity-100 transition-opacity rounded-xl"
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      )}
+                    </div>
+                    <p className="font-medium leading-relaxed italic text-gray-700 dark:text-gray-300 pl-2">
+                      "{comment.content}"
+                    </p>
+                  </Card>
+                ))}
+                {comments.length === 0 && (
+                  <div className="py-20 text-center bg-muted/10 rounded-[2.5rem] border-2 border-dashed">
+                    <p className="text-muted-foreground font-black uppercase text-xs tracking-widest italic">
+                      No broadcasts on this wall yet
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </section>
         </div>

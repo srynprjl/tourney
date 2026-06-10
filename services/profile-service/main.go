@@ -20,6 +20,16 @@ type Profile struct {
 	Location  string    `json:"location"`
 	Public    bool      `gorm:"default:true" json:"public"`
 	Awards    []Award   `gorm:"constraint:OnDelete:CASCADE;" json:"awards"`
+	Comments  []Comment `gorm:"constraint:OnDelete:CASCADE;" json:"comments"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Comment struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	ProfileID uint      `json:"profile_id"`
+	AuthorID  uint      `json:"author_id"`
+	Author    string    `json:"author"`
+	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -62,7 +72,7 @@ func initDB() {
 		if err == nil { break }
 		time.Sleep(2 * time.Second)
 	}
-	db.AutoMigrate(&Profile{}, &UserHistory{}, &Report{}, &Award{})
+	db.AutoMigrate(&Profile{}, &UserHistory{}, &Report{}, &Award{}, &Comment{})
 }
 
 func main() {
@@ -79,6 +89,9 @@ func main() {
 		api.POST("/profiles/me/awards", addProfileAward)
 		api.DELETE("/profiles/me/awards/:id", deleteProfileAward)
 		api.GET("/profiles/:username/history", getProfileHistory)
+		api.GET("/profiles/:username/comments", getProfileComments)
+		api.POST("/profiles/:username/comments", addProfileComment)
+		api.DELETE("/comments/:id", deleteComment)
 		api.POST("/reports", createReport)
 	}
 
@@ -121,7 +134,7 @@ func authMiddleware() gin.HandlerFunc {
 func getProfile(c *gin.Context) {
 	username := c.Param("username")
 	var p Profile
-	if err := db.Preload("Awards").Where("username = ?", username).First(&p).Error; err != nil {
+	if err := db.Preload("Awards").Preload("Comments").Where("username = ?", username).First(&p).Error; err != nil {
 		// If not found, check if it's the current user requesting their own profile
 		currUname, _ := c.Get("username")
 		currUID, _ := c.Get("user_id")
@@ -219,3 +232,64 @@ func createReport(c *gin.Context) {
 	db.Create(&r)
 	c.JSON(201, r)
 }
+
+func getProfileComments(c *gin.Context) {
+	username := c.Param("username")
+	var p Profile
+	if err := db.Where("username = ?", username).First(&p).Error; err != nil {
+		c.JSON(404, gin.H{"error": "Profile not found"})
+		return
+	}
+
+	var comments []Comment
+	db.Where("profile_id = ?", p.ID).Order("created_at desc").Find(&comments)
+	c.JSON(200, comments)
+}
+
+func addProfileComment(c *gin.Context) {
+	username := c.Param("username")
+	var p Profile
+	if err := db.Where("username = ?", username).First(&p).Error; err != nil {
+		c.JSON(404, gin.H{"error": "Profile not found"})
+		return
+	}
+
+	var comment Comment
+	if err := c.ShouldBindJSON(&comment); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	comment.ProfileID = p.ID
+	comment.AuthorID = c.MustGet("user_id").(uint)
+	comment.Author = c.MustGet("username").(string)
+	comment.CreatedAt = time.Now()
+
+	db.Create(&comment)
+	c.JSON(201, comment)
+}
+
+func deleteComment(c *gin.Context) {
+	id := c.Param("id")
+	uid := c.MustGet("user_id").(uint)
+	isAdmin := c.MustGet("is_admin").(bool)
+
+	var comment Comment
+	if err := db.First(&comment, id).Error; err != nil {
+		c.JSON(404, gin.H{"error": "Comment not found"})
+		return
+	}
+
+	// Check if author OR profile owner OR admin
+	var p Profile
+	db.First(&p, comment.ProfileID)
+
+	if comment.AuthorID != uid && p.UserID != uid && !isAdmin {
+		c.JSON(403, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	db.Delete(&comment)
+	c.JSON(200, gin.H{"message": "Comment deleted"})
+}
+

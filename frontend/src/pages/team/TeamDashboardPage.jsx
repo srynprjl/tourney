@@ -136,10 +136,20 @@ const TeamDashboardPage = () => {
     }
   };
 
+  const handleRemoveMember = async (userId) => {
+    if (!window.confirm('Remove this member from the squad?')) return;
+    try {
+      await teamService.removeMember(id, userId);
+      fetchTeam();
+    } catch (err) {
+      alert('Failed to remove member');
+    }
+  };
+
   const handleAddAward = async (e) => {
     e.preventDefault();
     try {
-      await api.post(`/team/${id}/awards`, newAward);
+      await teamService.addAward(id, newAward);
       setNewAward({ title: '', description: '' });
       setAwardModalOpen(false);
       fetchTeam();
@@ -151,7 +161,7 @@ const TeamDashboardPage = () => {
   const handleDeleteAward = async (awardId) => {
     if (!window.confirm('Delete this achievement?')) return;
     try {
-      await api.delete(`/team/${id}/awards/${awardId}`);
+      await teamService.deleteAward(id, awardId);
       fetchTeam();
     } catch (err) {
       alert('Deletion failed');
@@ -402,7 +412,14 @@ const TeamDashboardPage = () => {
                             <TableCell className="text-muted-foreground font-black text-[10px] uppercase tracking-widest">{new Date(m.joined_at).toLocaleDateString()}</TableCell>
                             <TableCell className="text-right pr-12">
                                {isOwner && m.user_id !== team.owner_id && (
-                                 <Button variant="ghost" size="icon" className="w-12 h-12 text-destructive hover:bg-destructive/10 rounded-2xl"><Trash2 size={20}/></Button>
+                                 <Button 
+                                   variant="ghost" 
+                                   size="icon" 
+                                   onClick={() => handleRemoveMember(m.user_id)}
+                                   className="w-12 h-12 text-destructive hover:bg-destructive/10 rounded-2xl"
+                                  >
+                                    <Trash2 size={20}/>
+                                  </Button>
                                )}
                             </TableCell>
                          </TableRow>

@@ -88,6 +88,10 @@ func main() {
 	api := r.Group("/")
 	api.Use(authMiddleware())
 	{
+		api.GET("/tournament/:tournamentId", listMatchesByTournament)
+		api.POST("/bulk", bulkCreateMatches)
+		api.DELETE("/tournament/:tournamentId", deleteMatchesByTournament)
+
 		api.GET("/:id", getMatch)
 		api.PUT("/:id/score", updateScore)
 		api.POST("/:id/events", addEvent)
@@ -100,6 +104,32 @@ func main() {
 		port = "8083"
 	}
 	r.Run(":" + port)
+}
+
+func listMatchesByTournament(c *gin.Context) {
+	tid := c.Param("tournamentId")
+	var matches []Match
+	db.Preload("Events").Where("tournament_id = ?", tid).Order("stage asc, round asc, id asc").Find(&matches)
+	c.JSON(http.StatusOK, matches)
+}
+
+func bulkCreateMatches(c *gin.Context) {
+	var matches []Match
+	if err := c.ShouldBindJSON(&matches); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := db.Create(&matches).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create matches"})
+		return
+	}
+	c.JSON(http.StatusCreated, matches)
+}
+
+func deleteMatchesByTournament(c *gin.Context) {
+	tid := c.Param("tournamentId")
+	db.Where("tournament_id = ?", tid).Delete(&Match{})
+	c.JSON(http.StatusOK, gin.H{"message": "Matches deleted"})
 }
 
 func authMiddleware() gin.HandlerFunc {
@@ -122,6 +152,7 @@ func authMiddleware() gin.HandlerFunc {
 		client := &http.Client{}
 		resp, err := client.Do(req)
 		if err != nil || resp.StatusCode != http.StatusOK {
+			log.Printf("Auth verify failed: err=%v, status=%v", err, resp.StatusCode)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
@@ -203,7 +234,10 @@ func updateScore(c *gin.Context) {
 		match.WinnerID = nil
 	}
 
-	db.Save(&match)
+	if err := db.Save(&match).Error; err != nil {
+		c.JSON(500, gin.H{"error": "Failed to save match score"})
+		return
+	}
 
 	// Advance logic (aggregate aware)
 	if tournament.Type == "knockout" || match.Stage == 1 {
@@ -332,5 +366,11 @@ func broadcastUpdate(room, eventType string, data interface{}) {
 		"data": data,
 	}
 	body, _ := json.Marshal(payload)
-	http.Post(realtimeURL+"/broadcast", "application/json", bytes.NewBuffer(body))
+	resp, err := http.Post(realtimeURL+"/broadcast", "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("Broadcast failed: err=%v", err)
+	} else {
+		log.Printf("Broadcast sent: status=%d", resp.StatusCode)
+		resp.Body.Close()
+	}
 }
