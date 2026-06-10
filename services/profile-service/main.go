@@ -25,11 +25,20 @@ type Profile struct {
 }
 
 type Comment struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	ProfileID  uint      `json:"profile_id"`
+	AuthorID   uint      `json:"author_id"`
+	Author     string    `json:"author"`
+	Content    string    `json:"content"`
+	CreatedAt  time.Time `json:"created_at"`
+	LikesCount int       `gorm:"default:0" json:"likes_count"`
+	IsLiked    bool      `gorm:"-" json:"is_liked"`
+}
+
+type CommentLike struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
-	ProfileID uint      `json:"profile_id"`
-	AuthorID  uint      `json:"author_id"`
-	Author    string    `json:"author"`
-	Content   string    `json:"content"`
+	CommentID uint      `gorm:"index" json:"comment_id"`
+	UserID    uint      `gorm:"index" json:"user_id"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -72,7 +81,7 @@ func initDB() {
 		if err == nil { break }
 		time.Sleep(2 * time.Second)
 	}
-	db.AutoMigrate(&Profile{}, &UserHistory{}, &Report{}, &Award{}, &Comment{})
+	db.AutoMigrate(&Profile{}, &UserHistory{}, &Report{}, &Award{}, &Comment{}, &CommentLike{})
 }
 
 func main() {
@@ -92,12 +101,38 @@ func main() {
 		api.GET("/profiles/:username/comments", getProfileComments)
 		api.POST("/profiles/:username/comments", addProfileComment)
 		api.DELETE("/comments/:id", deleteComment)
+		api.POST("/comments/:id/like", toggleLikeComment)
 		api.POST("/reports", createReport)
 	}
 
 	port := os.Getenv("PORT")
 	if port == "" { port = "8086" }
 	r.Run(":" + port)
+}
+
+func toggleLikeComment(c *gin.Context) {
+	id := c.Param("id")
+	uid := c.MustGet("user_id").(uint)
+
+	var comment Comment
+	if err := db.First(&comment, id).Error; err != nil {
+		c.JSON(404, gin.H{"error": "Comment not found"})
+		return
+	}
+
+	var like CommentLike
+	if err := db.Where("comment_id = ? AND user_id = ?", id, uid).First(&like).Error; err == nil {
+		// Unlike
+		db.Delete(&like)
+		db.Model(&comment).Update("likes_count", gorm.Expr("likes_count - 1"))
+		c.JSON(200, gin.H{"liked": false})
+	} else {
+		// Like
+		like = CommentLike{CommentID: comment.ID, UserID: uid, CreatedAt: time.Now()}
+		db.Create(&like)
+		db.Model(&comment).Update("likes_count", gorm.Expr("likes_count + 1"))
+		c.JSON(200, gin.H{"liked": true})
+	}
 }
 
 func authMiddleware() gin.HandlerFunc {
@@ -156,6 +191,7 @@ func getProfile(c *gin.Context) {
 		c.JSON(404, gin.H{"error": "Profile not found"})
 		return
 	}
+	populateCommentLikes(c, p.Comments)
 	c.JSON(200, p)
 }
 
@@ -235,6 +271,7 @@ func createReport(c *gin.Context) {
 
 func getProfileComments(c *gin.Context) {
 	username := c.Param("username")
+
 	var p Profile
 	if err := db.Where("username = ?", username).First(&p).Error; err != nil {
 		c.JSON(404, gin.H{"error": "Profile not found"})
@@ -243,6 +280,8 @@ func getProfileComments(c *gin.Context) {
 
 	var comments []Comment
 	db.Where("profile_id = ?", p.ID).Order("created_at desc").Find(&comments)
+	populateCommentLikes(c, comments)
+
 	c.JSON(200, comments)
 }
 
@@ -291,5 +330,17 @@ func deleteComment(c *gin.Context) {
 
 	db.Delete(&comment)
 	c.JSON(200, gin.H{"message": "Comment deleted"})
+}
+
+func populateCommentLikes(c *gin.Context, comments []Comment) {
+	uid, _ := c.Get("user_id")
+	if uid == nil {
+		return
+	}
+	for i := range comments {
+		var count int64
+		db.Model(&CommentLike{}).Where("comment_id = ? AND user_id = ?", comments[i].ID, uid.(uint)).Count(&count)
+		comments[i].IsLiked = count > 0
+	}
 }
 

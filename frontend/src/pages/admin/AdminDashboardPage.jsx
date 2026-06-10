@@ -26,7 +26,6 @@ const AdminDashboardPage = () => {
     { id: 'tournament', name: 'Tournament Engine', url: '/tournaments/health', status: 'unknown' },
     { id: 'match', name: 'Match Logic Processor', url: '/matches/health', status: 'unknown' },
     { id: 'team', name: 'Squad Roster Cloud', url: '/team/health', status: 'unknown' },
-    { id: 'payment', name: 'Financial Escrow', url: '/payment/health', status: 'unknown' },
     { id: 'profile', name: 'Player Profile Hub', url: '/profile/health', status: 'unknown' },
     { id: 'realtime', name: 'WebSocket Realtime', url: '/realtime/health', status: 'unknown' },
   ]);

@@ -22,11 +22,6 @@ services:
     environment: [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=match_db]
     volumes: [match_data:/var/lib/postgresql/data]
 
-  db-payment:
-    image: postgres:15-alpine
-    environment: [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=payment_db]
-    volumes: [payment_data:/var/lib/postgresql/data]
-
   db-profile:
     image: postgres:15-alpine
     environment: [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=profile_db]
@@ -45,7 +40,6 @@ services:
       - tournament-service
       - match-service
       - team-service
-      - payment-service
       - profile-service
       - realtime-service
 
@@ -83,12 +77,6 @@ services:
       - REALTIME_SERVICE_URL=http://realtime-service:8087
     depends_on: [db-team]
 
-  payment-service:
-    build: ./services/payment-service
-    environment:
-      - DB_URL=postgres://user:password@db-payment:5432/payment_db?sslmode=disable
-    depends_on: [db-payment]
-
   profile-service:
     build: ./services/profile-service
     environment:
@@ -114,5 +102,4 @@ volumes:
   tournament_data:
   team_data:
   match_data:
-  payment_data:
   profile_data:

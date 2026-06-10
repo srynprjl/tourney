@@ -11,7 +11,7 @@ api.interceptors.request.use((config) => {
   }
   
   // Ensure trailing slash for service roots to avoid Nginx redirects
-  const roots = ['/auth', '/tournaments', '/matches', '/team', '/payment', '/profile'];
+  const roots = ['/auth', '/tournaments', '/matches', '/team', '/profile'];
   if (roots.includes(config.url)) {
     config.url += '/';
   }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "@/services/api";
 import { teamService } from "@/services/teamService";
@@ -9,29 +9,20 @@ import {
   Users,
   Play,
   Plus,
-  Edit3,
   Trash2,
-  Save,
   ChevronRight,
-  ArrowRightCircle,
-  Info,
   Calendar,
   ScrollText,
   Newspaper,
-  MessageSquare,
   Megaphone,
-  Clock,
   Tv,
-  Gavel,
   ExternalLink,
   Lock,
   Globe,
   UserPlus,
   ShieldCheck,
-  AlertCircle,
   Activity,
   Award,
-  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -40,11 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
   CardContent,
-  CardFooter,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -69,6 +56,7 @@ import { Label } from "@/components/ui/label";
 
 const TournamentDetailsPage = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const [tournament, setTournament] = useState(null);
   const [standings, setStandings] = useState([]);
@@ -91,7 +79,6 @@ const TournamentDetailsPage = () => {
   const [prizeValue, setPrizeValue] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [selectedTeamId, setSelectedTeamId] = useState("");
-  const [hasPaid, setHasPaid] = useState(false);
   const [myTeams, setMyTeams] = useState([]);
   const [streamUrl, setStreamUrl] = useState("");
 
@@ -100,27 +87,6 @@ const TournamentDetailsPage = () => {
   const [editScore2, setEditScore2] = useState(0);
 
   const wsMessage = useWebSocket(id);
-
-  useEffect(() => {
-    fetchTournament();
-    fetchStandings();
-  }, [id]);
-
-  useEffect(() => {
-    if (tournament?.stream_link) {
-      setStreamUrl(tournament.stream_link);
-    }
-  }, [tournament]);
-
-  useEffect(() => {
-    if (
-      wsMessage &&
-      (wsMessage.type === "match_update" || wsMessage.type === "match_event")
-    ) {
-      fetchTournament();
-      fetchStandings();
-    }
-  }, [wsMessage]);
 
   const fetchTournament = async () => {
     try {
@@ -140,6 +106,40 @@ const TournamentDetailsPage = () => {
     }
   };
 
+  const fetchMyTeams = async () => {
+    try {
+      const res = await teamService.listMy();
+      setMyTeams(res.data || []);
+      if (res.data?.length > 0) {
+        setSelectedTeamId(res.data[0].id);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchTournament();
+    fetchStandings();
+    fetchMyTeams();
+  }, [id]);
+
+  useEffect(() => {
+    if (tournament?.stream_link) {
+      setStreamUrl(tournament.stream_link);
+    }
+  }, [tournament]);
+
+  useEffect(() => {
+    if (
+      wsMessage &&
+      (wsMessage.type === "match_update" || wsMessage.type === "match_event")
+    ) {
+      fetchTournament();
+      fetchStandings();
+    }
+  }, [wsMessage]);
+
   const handleUpdateScore = async (e) => {
     e.preventDefault();
     try {
@@ -155,15 +155,6 @@ const TournamentDetailsPage = () => {
     } catch (err) {
       console.error("Score Update Error:", err.response?.data || err.message);
       alert(`Failed to update score: ${err.response?.data?.error || err.message}`);
-    }
-  };
-
-  const fetchMyTeams = async () => {
-    try {
-      const res = await teamService.listMy();
-      setMyTeams(res.data || []);
-    } catch (err) {
-      console.error(err);
     }
   };
 
@@ -184,31 +175,13 @@ const TournamentDetailsPage = () => {
     try {
       await api.delete(`/tournaments/${id}/teams/${teamId}`);
       fetchTournament();
-    } catch (err) {
+    } catch {
       alert("Failed to remove squad");
-    }
-  };
-
-  const handlePay = async () => {
-    try {
-      const res = await api.post("/payment/stripe/pay", {
-        amount: tournament.entry_fee,
-        currency: "USD",
-      });
-      window.open(res.data.url, "_blank");
-      setHasPaid(true);
-      alert("Payment successful (Mock)! You can now complete registration.");
-    } catch (err) {
-      alert("Payment failed");
     }
   };
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (tournament.entry_fee > 0 && !hasPaid) {
-      alert("Please pay the entry fee first");
-      return;
-    }
     const team = myTeams.find((t) => t.id === selectedTeamId);
     if (!team) return;
     try {
@@ -235,7 +208,7 @@ const TournamentDetailsPage = () => {
       setNewsContent("");
       setNewsModalOpen(false);
       fetchTournament();
-    } catch (err) {
+    } catch {
       alert("Failed to post news");
     }
   };
@@ -247,7 +220,7 @@ const TournamentDetailsPage = () => {
       setRuleContent("");
       setRuleModalOpen(false);
       fetchTournament();
-    } catch (err) {
+    } catch {
       alert("Failed to add rule");
     }
   };
@@ -263,7 +236,7 @@ const TournamentDetailsPage = () => {
       setPrizeValue("");
       setPrizeModalOpen(false);
       fetchTournament();
-    } catch (err) {
+    } catch {
       alert("Failed to add prize");
     }
   };
@@ -273,7 +246,7 @@ const TournamentDetailsPage = () => {
     try {
       await api.delete(`/tournaments/${id}/prizes/${prizeId}`);
       fetchTournament();
-    } catch (err) {
+    } catch {
       alert("Failed to delete prize");
     }
   };
@@ -283,7 +256,7 @@ const TournamentDetailsPage = () => {
     try {
       await api.delete(`/tournaments/${id}/rules/${ruleId}`);
       fetchTournament();
-    } catch (err) {
+    } catch {
       alert("Failed to delete rule");
     }
   };
@@ -293,7 +266,7 @@ const TournamentDetailsPage = () => {
     try {
       await api.delete(`/tournaments/${id}/news/${newsId}`);
       fetchTournament();
-    } catch (err) {
+    } catch {
       alert("Failed to delete broadcast");
     }
   };
@@ -303,7 +276,7 @@ const TournamentDetailsPage = () => {
       await api.post(`/tournaments/${id}/generate`);
       fetchTournament();
       fetchStandings();
-    } catch (err) {
+    } catch {
       alert("Generation failed");
     }
   };
@@ -313,7 +286,7 @@ const TournamentDetailsPage = () => {
     try {
       await api.delete(`/tournaments/${id}`);
       navigate("/");
-    } catch (err) {
+    } catch {
       alert("Deletion failed");
     }
   };
@@ -437,6 +410,7 @@ const TournamentDetailsPage = () => {
         </div>
 
         {isOwner && (
+
           <div className="flex gap-3">
             <Button
               onClick={handleDeleteTournament}
@@ -904,45 +878,10 @@ const TournamentDetailsPage = () => {
                         </div>
                       )}
 
-                      {tournament.entry_fee > 0 && (
-                        <div className="p-6 bg-primary/5 rounded-[2rem] border border-primary/20 space-y-4">
-                          <div className="flex justify-between items-center">
-                            <span className="font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                              Entry Fee Required
-                            </span>
-                            <span className="text-2xl font-black text-primary italic">
-                              ${tournament.entry_fee}
-                            </span>
-                          </div>
-                          <Button
-                            type="button"
-                            onClick={handlePay}
-                            disabled={hasPaid}
-                            className={cn(
-                              "w-full h-12 rounded-xl font-black transition-all",
-                              hasPaid
-                                ? "bg-green-500 hover:bg-green-600 shadow-green-500/20"
-                                : "shadow-primary/20",
-                            )}
-                          >
-                            {hasPaid ? (
-                              <div className="flex items-center gap-2">
-                                <ShieldCheck size={18} /> FEE VERIFIED
-                              </div>
-                            ) : (
-                              "PAY ENTRY FEE"
-                            )}
-                          </Button>
-                        </div>
-                      )}
-
                       <DialogFooter>
                         <Button
                           type="submit"
-                          disabled={
-                            !selectedTeamId ||
-                            (tournament.entry_fee > 0 && !hasPaid)
-                          }
+                          disabled={!selectedTeamId}
                           className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20"
                         >
                           CONFIRM REGISTRATION

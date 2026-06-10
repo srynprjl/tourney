@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   ShieldCheck,
   Users,
+  Award,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/context/ThemeContext";
@@ -28,11 +29,12 @@ const Sidebar = () => {
 
   const navItems = [
     { name: "Dashboard", path: "/", icon: LayoutDashboard },
+    { name: "Arenas", path: "/tournaments", icon: Trophy },
     { name: "Teams", path: "/teams", icon: Users },
   ];
 
   if (user) {
-    navItems.push({ name: "My Profile", path: `/player/${user.username}`, icon: Trophy });
+    navItems.push({ name: "My Profile", path: `/player/${user.username}`, icon: Award });
   }
 
   if (user?.is_admin) {

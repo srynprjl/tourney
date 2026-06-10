@@ -9,6 +9,7 @@ import LoginPage from '@/pages/auth/LoginPage';
 import RegisterPage from '@/pages/auth/RegisterPage';
 import ApplicationPage from '@/pages/auth/ApplicationPage';
 import DashboardPage from '@/pages/dashboard/DashboardPage';
+import TournamentsPage from '@/pages/tournament/TournamentsPage';
 import TournamentDetailsPage from '@/pages/tournament/TournamentDetailsPage';
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
 import TeamsListPage from '@/pages/team/TeamsListPage';
@@ -26,6 +27,7 @@ function App() {
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/apply" element={<ApplicationPage />} />
               <Route path="/" element={<DashboardPage />} />
+              <Route path="/tournaments" element={<TournamentsPage />} />
               <Route path="/tournament/:id" element={<TournamentDetailsPage />} />
               <Route path="/admin" element={<AdminDashboardPage />} />
               <Route path="/teams" element={<TeamsListPage />} />

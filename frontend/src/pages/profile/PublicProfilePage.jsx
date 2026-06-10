@@ -20,6 +20,7 @@ import {
   Activity,
   Trash2,
   Send,
+  Heart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -135,6 +136,15 @@ const PublicProfilePage = () => {
       fetchComments();
     } catch (err) {
       alert("Failed to delete comment");
+    }
+  };
+
+  const handleToggleLike = async (commentId) => {
+    try {
+      await api.post(`/profile/comments/${commentId}/like`);
+      fetchComments();
+    } catch (err) {
+      alert("Failed to toggle like");
     }
   };
 
@@ -527,6 +537,20 @@ const PublicProfilePage = () => {
                     <p className="font-medium leading-relaxed italic text-gray-700 dark:text-gray-300 pl-2">
                       "{comment.content}"
                     </p>
+                    <div className="flex justify-between items-center mt-4 pt-4 border-t border-dashed border-border/50">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={cn(
+                          "rounded-full gap-2 font-black text-[10px] tracking-widest uppercase",
+                          comment.is_liked ? "text-red-500 bg-red-500/5 hover:bg-red-500/10" : "text-muted-foreground hover:bg-muted"
+                        )}
+                        onClick={() => handleToggleLike(comment.id)}
+                      >
+                        <Heart size={14} className={comment.is_liked ? "fill-current" : ""} />
+                        {comment.likes_count || 0} LIKES
+                      </Button>
+                    </div>
                   </Card>
                 ))}
                 {comments.length === 0 && (

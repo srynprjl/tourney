@@ -1,303 +1,233 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import api from '@/services/api';
+import { teamService } from '@/services/teamService';
 import { useAuth } from '@/context/AuthContext';
 import { 
-  Plus, Trophy, Users, Calendar, Activity, 
-  ChevronRight, Search, Filter, LayoutGrid, List,
-  ShieldCheck, Globe, Lock, Gamepad2, Settings2,
-  KeyRound
+  Trophy, Users, Activity, Target, 
+  TrendingUp, Award, Calendar, ChevronRight,
+  Shield, Zap, Radio, Globe
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
 // UI Components
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Dialog, DialogContent, DialogHeader, DialogTitle, 
-  DialogTrigger, DialogDescription, DialogFooter 
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 
 const DashboardPage = () => {
   const { user } = useAuth();
-  const [tournaments, setTournaments] = useState([]);
-  const [search, setSearch] = useState('');
-  const [view, setView] = useState('grid');
-  const [activeTab, setActiveTab] = useState('all'); // 'all' or 'mine'
-  const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
-  const [joinOpen, setJoinOpen] = useState(false);
-  const [joinCode, setJoinCode] = useState("");
-
-  // Form State
-  const [formData, setFormData] = useState({
-    name: '',
-    type: 'knockout',
-    sport: 'football',
-    mode: 'self',
-    max_teams: 8,
-    is_public: true,
-    is_double: false,
-    group_count: 2,
-    teams_per_group: 4,
-    promote_count: 2,
-    entry_fee: 0
+  const [stats, setStats] = useState({
+    totalArenas: 0,
+    myArenas: 0,
+    myTeams: 0,
+    activeMatches: 0,
+    recentActivity: []
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchTournaments();
+    fetchDashboardData();
   }, []);
 
-  const fetchTournaments = async () => {
+  const fetchDashboardData = async () => {
     try {
-      const res = await api.get('/tournaments');
-      setTournaments(res.data || []);
+      const [tournamentsRes, myTeamsRes] = await Promise.all([
+        api.get('/tournaments'),
+        teamService.listMy()
+      ]);
+
+      const tournaments = tournamentsRes.data || [];
+      const myTeams = myTeamsRes.data || [];
+      
+      // Calculate some derived stats
+      const myArenas = tournaments.filter(t => t.creator_id === user?.user_id).length;
+      
+      // Get some "active matches" - this is speculative, we'll just count total matches in my tournaments
+      let activeMatches = 0;
+      tournaments.forEach(t => {
+        if (t.matches) {
+          activeMatches += t.matches.filter(m => m.status === 'ongoing').length;
+        }
+      });
+
+      setStats({
+        totalArenas: tournaments.length,
+        myArenas: myArenas,
+        myTeams: myTeams.length,
+        activeMatches: activeMatches,
+        recentActivity: tournaments.slice(0, 5) // Just use latest tournaments as "activity"
+      });
     } catch (err) {
-      console.error(err);
+      console.error("Dashboard fetch error:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    try {
-      await api.post('/tournaments', {
-        ...formData,
-        max_teams: parseInt(formData.max_teams),
-        group_count: parseInt(formData.group_count),
-        teams_per_group: parseInt(formData.teams_per_group),
-        promote_count: parseInt(formData.promote_count),
-        entry_fee: parseFloat(formData.entry_fee)
-      });
-      setOpen(false);
-      fetchTournaments();
-    } catch (err) {
-      alert('Failed to create tournament');
-    }
-  };
-
-  const handleJoinByCode = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await api.get(`/tournaments/by-code/${joinCode}`);
-      navigate(`/tournament/${res.data.id}`);
-    } catch (err) {
-      alert("Arena not found or code invalid");
-    }
-  };
-
-  const filtered = tournaments
-    .filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
-    .filter(t => activeTab === 'all' ? true : t.creator_id === user?.user_id);
-
-  if (loading) return <div className="p-12 text-center animate-pulse font-black text-muted-foreground uppercase tracking-widest">CONNECTING TO ARENA NETWORK...</div>;
+  if (loading) return <div className="p-12 text-center animate-pulse font-black text-muted-foreground uppercase tracking-widest">SYNCHRONIZING OPERATIONAL DATA...</div>;
 
   return (
     <div className="max-w-7xl mx-auto space-y-12 pb-24">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 px-4">
-        <div className="space-y-2">
-          <h1 className="text-6xl font-black tracking-tighter italic uppercase">Arena Center</h1>
-          <p className="text-primary font-black uppercase text-xs tracking-[0.4em]">Global Competition Deployment Hub</p>
+      <header className="px-4">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div className="space-y-2">
+            <h1 className="text-6xl font-black tracking-tighter italic uppercase">Command Center</h1>
+            <p className="text-primary font-black uppercase text-xs tracking-[0.4em]">Strategic Overview & Ecosystem Vitals</p>
+          </div>
+          <div className="flex items-center gap-4 bg-muted/40 p-4 rounded-3xl border border-border/50">
+            <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
+              <Shield size={24} />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Active Operator</p>
+              <p className="text-lg font-black uppercase italic tracking-tighter">{user?.username}</p>
+            </div>
+          </div>
         </div>
+      </header>
 
-        <div className="flex gap-4">
-          <Dialog open={joinOpen} onOpenChange={setJoinOpen}>
-            <DialogTrigger asChild>
-              <Button size="lg" variant="outline" className="h-16 px-10 rounded-2xl font-black border-primary/20 gap-3 shadow-xl">
-                <KeyRound size={18} /> JOIN BY CODE
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="rounded-[3rem] border-none shadow-2xl p-0 overflow-hidden max-w-md">
-               <DialogHeader className="bg-muted p-12">
-                  <DialogTitle className="text-3xl font-black uppercase italic tracking-tighter text-foreground">Secure Entry</DialogTitle>
-                  <DialogDescription className="font-bold uppercase text-[10px] tracking-widest mt-2 text-muted-foreground/60">Enter the authorized arena join code</DialogDescription>
-               </DialogHeader>
-               <form onSubmit={handleJoinByCode} className="p-12 space-y-8">
-                  <div className="space-y-2">
-                     <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Arena Vector Code</Label>
-                     <Input placeholder="E.g. X9F2B3" className="h-16 rounded-2xl font-black text-2xl tracking-[0.5em] text-center uppercase" value={joinCode} onChange={e => setJoinCode(e.target.value)} required />
-                  </div>
-                  <DialogFooter>
-                     <Button type="submit" className="w-full h-16 rounded-2xl font-black text-lg">VERIFY & ACCESS</Button>
-                  </DialogFooter>
-               </form>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button size="lg" className="h-16 px-10 rounded-2xl font-black shadow-2xl shadow-primary/20 gap-3 group">
-                <Plus className="group-hover:rotate-90 transition-transform duration-300" /> 
-                INITIALIZE ARENA
-              </Button>
-            </DialogTrigger>
-          <DialogContent className="max-w-3xl rounded-[3rem] p-0 border-none shadow-2xl overflow-hidden">
-            <DialogHeader className="bg-primary p-12 text-primary-foreground">
-               <DialogTitle className="text-4xl font-black uppercase italic tracking-tighter">Arena Configuration</DialogTitle>
-               <DialogDescription className="text-primary-foreground/70 font-bold uppercase text-[10px] tracking-[0.2em] mt-2">Specify operational parameters for deployment</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreate} className="p-12 space-y-10 max-h-[70vh] overflow-y-auto bg-card">
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                  <div className="space-y-2 col-span-full">
-                    <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Arena Designation</Label>
-                    <Input placeholder="E.g. WORLD CUP PRO 2026" className="h-14 rounded-2xl font-black text-xl uppercase italic shadow-inner" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Operational Discipline</Label>
-                    <Select value={formData.sport} onValueChange={v => setFormData({...formData, sport: v})}>
-                       <SelectTrigger className="h-14 rounded-2xl font-black uppercase tracking-tight text-md"><SelectValue /></SelectTrigger>
-                       <SelectContent className="rounded-2xl border-none shadow-2xl">
-                          <SelectItem value="football" className="font-bold uppercase py-3">Football</SelectItem>
-                          <SelectItem value="cricket" className="font-bold uppercase py-3">Cricket</SelectItem>
-                          <SelectItem value="basketball" className="font-bold uppercase py-3">Basketball</SelectItem>
-                       </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Engine Type</Label>
-                    <Select value={formData.type} onValueChange={v => setFormData({...formData, type: v})}>
-                       <SelectTrigger className="h-14 rounded-2xl font-black uppercase tracking-tight text-md"><SelectValue /></SelectTrigger>
-                       <SelectContent className="rounded-2xl border-none shadow-2xl">
-                          <SelectItem value="knockout" className="font-bold uppercase py-3">Knockout (Direct)</SelectItem>
-                          <SelectItem value="group" className="font-bold uppercase py-3">Group Phase (Hybrid)</SelectItem>
-                       </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Management Protocol</Label>
-                    <Select value={formData.mode} onValueChange={v => setFormData({...formData, mode: v})}>
-                       <SelectTrigger className="h-14 rounded-2xl font-black uppercase tracking-tight text-md"><SelectValue /></SelectTrigger>
-                       <SelectContent className="rounded-2xl border-none shadow-2xl">
-                          <SelectItem value="self" className="font-bold uppercase py-3">Organizer Controlled</SelectItem>
-                          <SelectItem value="registration" className="font-bold uppercase py-3">Public Enlistment</SelectItem>
-                       </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Combatant Capacity</Label>
-                    <Input type="number" className="h-14 rounded-2xl font-black text-xl shadow-inner" value={formData.max_teams} onChange={e => setFormData({...formData, max_teams: e.target.value})} />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Entry Fee (USD)</Label>
-                    <Input type="number" step="0.01" className="h-14 rounded-2xl font-black text-xl shadow-inner text-primary" value={formData.entry_fee} onChange={e => setFormData({...formData, entry_fee: e.target.value})} />
-                  </div>
-
-                  {formData.type === 'group' && (
-                     <>
-                        <div className="space-y-2">
-                           <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Sector Count (Groups)</Label>
-                           <Input type="number" className="h-14 rounded-2xl font-black text-xl shadow-inner" value={formData.group_count} onChange={e => setFormData({...formData, group_count: e.target.value})} />
-                        </div>
-                        <div className="space-y-2">
-                           <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Units per Sector</Label>
-                           <Input type="number" className="h-14 rounded-2xl font-black text-xl shadow-inner" value={formData.teams_per_group} onChange={e => setFormData({...formData, teams_per_group: e.target.value})} />
-                        </div>
-                        <div className="space-y-2 col-span-full">
-                           <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Promotion Protocol (Units to Advance)</Label>
-                           <Input type="number" className="h-14 rounded-2xl font-black text-xl shadow-inner" value={formData.promote_count} onChange={e => setFormData({...formData, promote_count: e.target.value})} />
-                        </div>
-                     </>
-                  )}
-
-                  <div className="flex items-center justify-between p-6 bg-muted/40 rounded-3xl border border-border/50 col-span-full">
-                     <div className="space-y-1">
-                        <Label className="font-black uppercase text-[11px] tracking-widest">Public Deployment</Label>
-                        <p className="text-[10px] text-muted-foreground font-bold uppercase">Visible in global sector search</p>
-                     </div>
-                     <Switch checked={formData.is_public} onCheckedChange={v => setFormData({...formData, is_public: v})} className="data-[state=checked]:bg-primary" />
-                  </div>
-               </div>
-
-               <DialogFooter>
-                  <Button type="submit" className="w-full h-16 rounded-2xl font-black text-xl shadow-2xl shadow-primary/30 transform hover:-translate-y-1 transition-all uppercase italic">Initiate Arena Deployment</Button>
-               </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-        </div>
-        </header>
-
-      <div className="flex flex-col md:flex-row gap-6 items-center justify-between bg-card/60 backdrop-blur-xl p-8 rounded-[3.5rem] border border-border/50 mx-4 shadow-xl">
-         <div className="flex gap-2 bg-muted/40 p-1.5 rounded-[1.5rem] border border-border/40">
-            <Button variant={activeTab === 'all' ? 'default' : 'ghost'} className={cn("rounded-2xl font-black text-[10px] uppercase tracking-widest px-8", activeTab === 'all' && "shadow-lg bg-card text-primary")} onClick={() => setActiveTab('all')}>Global Arenas</Button>
-            <Button variant={activeTab === 'mine' ? 'default' : 'ghost'} className={cn("rounded-2xl font-black text-[10px] uppercase tracking-widest px-8", activeTab === 'mine' && "shadow-lg bg-card text-primary")} onClick={() => setActiveTab('mine')}>My Arenas</Button>
-         </div>
-
-         <div className="relative w-full md:max-w-md">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-muted-foreground/30" size={22} />
-            <Input 
-              placeholder="Filter Arenas..." 
-              className="pl-16 h-14 rounded-[1.5rem] bg-muted/30 border-none font-black text-lg shadow-inner focus:ring-4 focus:ring-primary/10 uppercase tracking-tighter"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-         </div>
+      {/* Primary Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 px-4">
+        <StatCard 
+          title="Global Arenas" 
+          value={stats.totalArenas} 
+          icon={Globe} 
+          color="text-blue-500" 
+          bg="bg-blue-500/5"
+          description="Active competition sectors"
+        />
+        <StatCard 
+          title="My Deployments" 
+          value={stats.myArenas} 
+          icon={Zap} 
+          color="text-orange-500" 
+          bg="bg-orange-500/5"
+          description="Arenas under your control"
+        />
+        <StatCard 
+          title="Active Units" 
+          value={stats.myTeams} 
+          icon={Users} 
+          color="text-green-500" 
+          bg="bg-green-500/5"
+          description="Squads in your roster"
+        />
+        <StatCard 
+          title="Live Sessions" 
+          value={stats.activeMatches} 
+          icon={Radio} 
+          color="text-red-500" 
+          bg="bg-red-500/5"
+          description="Ongoing combat operations"
+        />
       </div>
 
-      <div className={cn(
-        "grid gap-10 px-4",
-        view === 'grid' ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
-      )}>
-        {filtered.map(t => (
-          <Card key={t.id} className="group relative overflow-hidden rounded-[3.5rem] border-none shadow-xl hover:shadow-2xl transition-all duration-500 bg-card p-10 space-y-8">
-            <div className="absolute top-0 left-0 w-full h-1.5 bg-primary/10 group-hover:bg-primary transition-colors" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 px-4">
+        {/* Main Content Area */}
+        <div className="lg:col-span-2 space-y-12">
+          <section className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-3xl font-black uppercase tracking-tighter italic flex items-center gap-4">
+                <TrendingUp className="text-primary" /> Performance Matrix
+              </h2>
+              <Button variant="link" className="font-black uppercase text-xs tracking-widest text-primary" asChild>
+                <Link to="/tournaments">View All Arenas <ChevronRight size={14} /></Link>
+              </Button>
+            </div>
             
-            <div className="flex justify-between items-start">
-               <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] tracking-widest uppercase px-4 py-1.5 rounded-full">
-                  {t.sport}
-               </Badge>
-               <div className="flex gap-3">
-                  {t.creator_id === user?.user_id && <Badge className="bg-orange-500/10 text-orange-600 border-none font-black text-[9px] uppercase px-3">Owner</Badge>}
-                  {t.is_public ? <Globe size={18} className="text-green-500/30 group-hover:text-green-500 transition-colors"/> : <Lock size={18} className="text-orange-500/30 group-hover:text-orange-500 transition-colors"/>}
-               </div>
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <Card className="rounded-[3rem] border-none shadow-xl bg-card p-8 flex flex-col justify-between">
+                <div className="space-y-4">
+                  <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
+                    <Trophy size={28} />
+                  </div>
+                  <h3 className="text-2xl font-black uppercase tracking-tight italic">Championship Potential</h3>
+                  <p className="text-muted-foreground font-medium text-sm">Your squads are currently participating in {stats.myTeams} different competition sectors. Maintain operational excellence.</p>
+                </div>
+                <Button className="mt-8 rounded-2xl font-black uppercase tracking-widest h-14 shadow-lg shadow-primary/20" asChild>
+                  <Link to="/teams">Manage Roster</Link>
+                </Button>
+              </Card>
 
-            <div className="space-y-2">
-               <h2 className="text-3xl font-black tracking-tighter uppercase italic group-hover:text-primary transition-colors leading-none">{t.name}</h2>
-               <p className="font-bold text-[10px] uppercase tracking-[0.2em] text-muted-foreground opacity-40">Sector-ID: {t.id.split('-')[0]}</p>
+              <Card className="rounded-[3rem] border-none shadow-xl bg-card p-8 flex flex-col justify-between">
+                <div className="space-y-4">
+                  <div className="w-14 h-14 bg-orange-500/10 rounded-2xl flex items-center justify-center text-orange-600">
+                    <Target size={28} />
+                  </div>
+                  <h3 className="text-2xl font-black uppercase tracking-tight italic">Tactical Deployment</h3>
+                  <p className="text-muted-foreground font-medium text-sm">You have successfully deployed {stats.myArenas} arenas. The ecosystem currently hosts {stats.totalArenas} active competition sectors.</p>
+                </div>
+                <Button variant="outline" className="mt-8 rounded-2xl font-black uppercase tracking-widest h-14 border-primary/20" asChild>
+                  <Link to="/tournaments">Arena Hub</Link>
+                </Button>
+              </Card>
             </div>
+          </section>
+        </div>
 
-            <div className="grid grid-cols-2 gap-6 mt-8">
-               <div className="bg-muted/30 p-5 rounded-[2rem] space-y-1 group-hover:bg-primary/5 transition-colors">
-                  <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest flex items-center gap-2"><Users size={12}/> Slots</p>
-                  <p className="text-2xl font-black italic">{t.max_teams} Units</p>
-               </div>
-               <div className="bg-muted/30 p-5 rounded-[2rem] space-y-1 group-hover:bg-primary/5 transition-colors">
-                  <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest flex items-center gap-2"><Activity size={12}/> Engine</p>
-                  <p className="text-2xl font-black capitalize italic">{t.type}</p>
-               </div>
+        {/* Sidebar Activity Area */}
+        <div className="space-y-12">
+          <section className="space-y-6">
+            <h2 className="text-2xl font-black uppercase tracking-tighter italic flex items-center gap-4">
+              <Activity className="text-primary" size={20} /> Latest Signals
+            </h2>
+            <div className="space-y-4">
+              {stats.recentActivity.map((activity, idx) => (
+                <div key={activity.id} className="flex gap-4 p-4 rounded-2xl bg-muted/20 border border-border/50 hover:bg-muted/40 transition-colors">
+                  <div className="w-10 h-10 bg-card rounded-xl flex items-center justify-center text-primary shrink-0 border border-border/50">
+                    <Radio size={18} />
+                  </div>
+                  <div className="space-y-1 min-w-0">
+                    <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">New Arena Detected</p>
+                    <p className="font-black uppercase tracking-tight truncate italic">{activity.name}</p>
+                    <div className="flex items-center gap-2">
+                       <Badge variant="secondary" className="text-[8px] font-black uppercase px-2 py-0 h-4 bg-primary/10 text-primary border-none">{activity.sport}</Badge>
+                       <span className="text-[9px] font-bold text-muted-foreground uppercase opacity-40">Vector-0{idx+1}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {stats.recentActivity.length === 0 && (
+                <div className="p-8 text-center bg-muted/20 rounded-2xl border border-dashed">
+                  <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Silence in Sector</p>
+                </div>
+              )}
             </div>
+          </section>
 
-            <Button asChild className="w-full h-16 rounded-[1.5rem] font-black text-lg shadow-xl shadow-primary/10 group-hover:shadow-primary/30 transition-all transform group-hover:-translate-y-1">
-               <Link to={`/tournament/${t.id}`}>ACCESS ARENA <ChevronRight size={22} className="ml-1 group-hover:translate-x-1 transition-transform"/></Link>
-            </Button>
+          <Card className="rounded-[2.5rem] border-none shadow-xl bg-primary p-8 text-primary-foreground">
+             <div className="space-y-4">
+                <Award size={40} className="mb-2" />
+                <h3 className="text-2xl font-black uppercase italic tracking-tighter">Elite Status</h3>
+                <p className="text-primary-foreground/70 font-bold text-xs uppercase tracking-widest leading-relaxed">Your operational clearance allows for unlimited arena deployment and squad enlistment.</p>
+                <div className="pt-4 flex items-center gap-4">
+                   <div className="h-2 flex-1 bg-primary-foreground/20 rounded-full overflow-hidden">
+                      <div className="h-full bg-primary-foreground w-3/4" />
+                   </div>
+                   <span className="text-[10px] font-black">Level 07</span>
+                </div>
+             </div>
           </Card>
-        ))}
+        </div>
       </div>
-
-      {filtered.length === 0 && (
-         <div className="py-48 text-center space-y-8 bg-muted/10 rounded-[4rem] border-4 border-dashed border-border/50 mx-4">
-            <Trophy size={80} className="mx-auto text-muted-foreground/10 animate-pulse" />
-            <div className="space-y-2">
-               <p className="text-4xl font-black text-muted-foreground/30 uppercase tracking-tighter italic">No Signals Detected</p>
-               <p className="text-xs font-bold text-muted-foreground/20 uppercase tracking-[0.5em]">Adjust filters or initialize a new arena</p>
-            </div>
-         </div>
-      )}
     </div>
   );
 };
+
+const StatCard = ({ title, value, icon: Icon, color, bg, description }) => (
+  <Card className="rounded-[2.5rem] border-none shadow-xl bg-card p-8 group hover:-translate-y-1 transition-all duration-300">
+    <div className="flex flex-col gap-6">
+      <div className={cn("w-16 h-16 rounded-[1.5rem] flex items-center justify-center transition-all duration-300 group-hover:scale-110 shadow-lg", bg, color)}>
+        <Icon size={32} />
+      </div>
+      <div className="space-y-1">
+        <p className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">{title}</p>
+        <p className="text-5xl font-black tracking-tighter italic">{value}</p>
+        <p className="text-[9px] font-bold text-muted-foreground uppercase opacity-40 mt-2">{description}</p>
+      </div>
+    </div>
+  </Card>
+);
 
 export default DashboardPage;
