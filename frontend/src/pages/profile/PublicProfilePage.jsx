@@ -183,13 +183,13 @@ const PublicProfilePage = () => {
   if (loading)
     return (
       <div className="min-h-[400px] flex items-center justify-center font-bold tracking-tighter text-2xl animate-pulse uppercase">
-        Decrypting Identity...
+        Loading Profile...
       </div>
     );
   if (!profile)
     return (
       <div className="p-12 text-center font-black text-red-600 uppercase tracking-widest">
-        Identity Not Found
+        Profile Not Found
       </div>
     );
 
@@ -206,7 +206,7 @@ const PublicProfilePage = () => {
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-primary" />
-              <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Operator Identity</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">User Profile</span>
             </div>
             <div className="flex items-center gap-4">
               <h1 className="text-6xl font-bold tracking-tighter uppercase leading-none">
@@ -237,7 +237,7 @@ const PublicProfilePage = () => {
                 <span className="opacity-60">{profile.location || "GLOBAL"}</span>
               )}
               <span className="opacity-20">//</span>
-              <span className="text-primary opacity-100">PRO COMPETITOR</span>
+              <span className="text-primary opacity-100">COMPETITOR</span>
             </div>
           </div>
         </div>
@@ -247,7 +247,7 @@ const PublicProfilePage = () => {
             onClick={handleSave}
             className="px-10 font-black uppercase tracking-widest text-[10px] h-12"
           >
-            Save Changes
+            Save Profile
           </Button>
         )}
       </header>
@@ -256,7 +256,7 @@ const PublicProfilePage = () => {
         {/* Sidebar Stats */}
         <div className="lg:col-span-4 space-y-12">
           <section className="space-y-6">
-            <h2 className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 border-b pb-4">Biography</h2>
+            <h2 className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 border-b pb-4">About</h2>
             <div className="p-0">
               {isEditing ? (
                 <textarea
@@ -269,7 +269,7 @@ const PublicProfilePage = () => {
               ) : (
                 <p className="text-[10px] font-bold uppercase tracking-widest leading-loose opacity-60">
                   {profile.bio ||
-                    "No biography provided. Operational status confirmed."}
+                    "No biography provided."}
                 </p>
               )}
             </div>
@@ -293,14 +293,14 @@ const PublicProfilePage = () => {
                   </DialogTrigger>
                   <DialogContent className="border-0 rounded-none p-10">
                     <DialogHeader className="space-y-6">
-                      <DialogTitle className="text-3xl font-bold uppercase tracking-tighter">New Record</DialogTitle>
+                      <DialogTitle className="text-3xl font-bold uppercase tracking-tighter">New Award</DialogTitle>
                       <DialogDescription className="text-[10px] font-bold uppercase tracking-widest opacity-60">
-                        Log a new operational milestone.
+                        Record a new achievement.
                       </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleAddAward} className="space-y-8 pt-8">
                       <div className="space-y-3">
-                        <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Achievement Title</Label>
+                        <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Award Title</Label>
                         <Input
                           placeholder="E.G. MVP"
                           className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs uppercase"
@@ -326,7 +326,7 @@ const PublicProfilePage = () => {
                           required
                         />
                       </div>
-                      <Button type="submit" className="w-full font-black uppercase tracking-widest text-[10px] h-14">Commit Achievement</Button>
+                      <Button type="submit" className="w-full font-black uppercase tracking-widest text-[10px] h-14">Commit Award</Button>
                     </form>
                   </DialogContent>
                 </Dialog>
@@ -341,7 +341,7 @@ const PublicProfilePage = () => {
                 >
                   <div className="flex flex-col space-y-8">
                     <div className="flex items-center justify-between">
-                       <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20">Record {String(i + 1).padStart(2, '0')}</span>
+                       <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20">Award {String(i + 1).padStart(2, '0')}</span>
                        <Trophy className="opacity-20 group-hover:opacity-100 transition-opacity" size={16} />
                     </div>
                     <div className="space-y-2">
@@ -363,14 +363,14 @@ const PublicProfilePage = () => {
               ))}
               {(!profile.awards || profile.awards.length === 0) && (
                 <div className="col-span-full py-20 text-center border-b border-r">
-                   <h3 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30">No recorded achievements</h3>
+                   <h3 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30">No recorded awards</h3>
                 </div>
               )}
             </div>
           </section>
 
           <section className="space-y-12">
-            <h2 className="text-xs font-black uppercase tracking-[0.4em] opacity-40 border-b pb-6">Timeline</h2>
+            <h2 className="text-xs font-black uppercase tracking-[0.4em] opacity-40 border-b pb-6">History</h2>
             <div className="border-t border-l">
               <Table>
                 <TableHeader>
@@ -413,7 +413,7 @@ const PublicProfilePage = () => {
                         colSpan={3}
                         className="py-16 text-center border-r border-b"
                       >
-                         <h3 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30">No active signals</h3>
+                         <h3 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30">No active arenas</h3>
                       </TableCell>
                     </TableRow>
                   )}
@@ -428,7 +428,7 @@ const PublicProfilePage = () => {
               <div className="space-y-6">
                 <textarea
                   className="w-full min-h-[120px] p-8 bg-accent/30 border-none outline-none focus:ring-0 font-bold text-[10px] uppercase tracking-widest leading-relaxed"
-                  placeholder="LEAVE BROADCAST MESSAGE..."
+                  placeholder="LEAVE A MESSAGE..."
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
                 />
@@ -437,7 +437,7 @@ const PublicProfilePage = () => {
                     onClick={handlePostComment}
                     className="px-12 font-black uppercase tracking-widest text-[10px] h-12"
                   >
-                    Broadcast
+                    Post Message
                   </Button>
                 </div>
               </div>
@@ -497,7 +497,7 @@ const PublicProfilePage = () => {
                 ))}
                 {comments.length === 0 && (
                   <div className="py-20 text-center border-r border-b">
-                     <h3 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30">No active broadcasts</h3>
+                     <h3 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30">No messages</h3>
                   </div>
                 )}
               </div>

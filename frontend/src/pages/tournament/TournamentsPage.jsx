@@ -126,7 +126,7 @@ const TournamentsPage = () => {
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-primary" />
-            <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Deployment Matrix</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Arenas Overview</span>
           </div>
           <h1 className="text-6xl font-bold tracking-tighter uppercase leading-none">Arenas</h1>
         </div>
@@ -135,19 +135,19 @@ const TournamentsPage = () => {
           <Dialog open={joinOpen} onOpenChange={setJoinOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" className="px-8 font-black uppercase tracking-widest text-[10px] h-12">
-                Join Sector
+                Join Arena
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md border-0 rounded-none p-10">
               <DialogHeader className="space-y-6">
-                <DialogTitle className="text-3xl font-bold uppercase tracking-tighter">Secure Access</DialogTitle>
+                <DialogTitle className="text-3xl font-bold uppercase tracking-tighter">Join Arena</DialogTitle>
                 <DialogDescription className="text-[10px] font-bold uppercase tracking-widest opacity-60">
-                  Enter the authorized access code for the private arena.
+                  Enter the invite code for the private arena.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleJoinByCode} className="space-y-10 pt-8">
                 <div className="space-y-4">
-                  <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Arena Vector Code</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Invite Code</Label>
                   <Input
                     placeholder="X9F2B3"
                     className="h-16 text-center text-3xl font-bold tracking-[0.3em] border-x-0 border-t-0 border-b rounded-none focus-visible:ring-0 focus-visible:border-primary transition-colors uppercase"
@@ -156,7 +156,7 @@ const TournamentsPage = () => {
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full font-black uppercase tracking-widest text-[10px] h-14">Verify & Access</Button>
+                <Button type="submit" className="w-full font-black uppercase tracking-widest text-[10px] h-14">Join Now</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -164,14 +164,14 @@ const TournamentsPage = () => {
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button className="px-8 font-black uppercase tracking-widest text-[10px] h-12">
-                Initialize Arena
+                Create Arena
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl border-0 rounded-none p-10">
               <DialogHeader className="space-y-6">
-                <DialogTitle className="text-3xl font-bold uppercase tracking-tighter">New Deployment</DialogTitle>
+                <DialogTitle className="text-3xl font-bold uppercase tracking-tighter">New Arena</DialogTitle>
                 <DialogDescription className="text-[10px] font-bold uppercase tracking-widest opacity-60">
-                  Configure operational parameters for the new tournament sector.
+                  Configure the settings for your new tournament.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleCreate} className="space-y-8 pt-8">
@@ -190,7 +190,7 @@ const TournamentsPage = () => {
                   </div>
 
                   <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Discipline</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Sport</Label>
                     <Select
                       value={formData.sport}
                       onValueChange={(v) =>
@@ -221,13 +221,13 @@ const TournamentsPage = () => {
                       </SelectTrigger>
                       <SelectContent className="rounded-none border shadow-none">
                         <SelectItem value="knockout" className="text-[10px] font-bold uppercase tracking-widest">Knockout</SelectItem>
-                        <SelectItem value="group" className="text-[10px] font-bold uppercase tracking-widest">Group Phase</SelectItem>
+                        <SelectItem value="group" className="text-[10px] font-bold uppercase tracking-widest">Group Stage</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Unit Capacity</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Max Teams</Label>
                     <Input
                       type="number"
                       className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs"
@@ -253,8 +253,8 @@ const TournamentsPage = () => {
 
                   <div className="flex items-center justify-between py-6 border-b col-span-full">
                     <div className="space-y-1">
-                      <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Public Deployment</Label>
-                      <p className="text-[8px] font-bold uppercase tracking-widest opacity-60">Visible to all active operators.</p>
+                      <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Public Visibility</Label>
+                      <p className="text-[8px] font-bold uppercase tracking-widest opacity-60">Visible to all users.</p>
                     </div>
                     <Switch
                       checked={formData.is_public}
@@ -265,7 +265,7 @@ const TournamentsPage = () => {
                   </div>
                 </div>
 
-                <Button type="submit" className="w-full font-black uppercase tracking-widest text-[10px] h-14">Deploy Sector</Button>
+                <Button type="submit" className="w-full font-black uppercase tracking-widest text-[10px] h-14">Create Arena</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -281,7 +281,7 @@ const TournamentsPage = () => {
               )}
               onClick={() => setActiveTab("all")}
             >
-              Global network
+              Public
             </button>
             <button
               className={cn(
@@ -290,14 +290,14 @@ const TournamentsPage = () => {
               )}
               onClick={() => setActiveTab("mine")}
             >
-              My sectors
+              My Arenas
             </button>
          </div>
 
          <div className="relative flex-1 w-full">
             <Search className="absolute left-0 top-1/2 -translate-y-1/2 text-muted-foreground opacity-40" size={16} />
             <Input
-              placeholder="FILTER BY NAME..."
+              placeholder="SEARCH BY NAME..."
               className="pl-8 h-12 border-x-0 border-t-0 border-b rounded-none focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-[0.2em] text-[10px]"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -327,8 +327,8 @@ const TournamentsPage = () => {
 
             <div className="grid grid-cols-2 gap-8 mb-12">
                <div className="space-y-1">
-                  <p className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.3em]">Capacity</p>
-                  <p className="text-xl font-bold uppercase tracking-tighter">{t.max_teams} Units</p>
+                  <p className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.3em]">Max Teams</p>
+                  <p className="text-xl font-bold uppercase tracking-tighter">{t.max_teams} Teams</p>
                </div>
                <div className="space-y-1">
                   <p className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.3em]">Entry Fee</p>
@@ -345,7 +345,7 @@ const TournamentsPage = () => {
 
       {filtered.length === 0 && (
         <div className="py-32 text-center border-t border-b">
-          <h3 className="text-xs font-black uppercase tracking-[0.5em] opacity-30">No active signals detected</h3>
+          <h3 className="text-xs font-black uppercase tracking-[0.5em] opacity-30">No arenas found</h3>
         </div>
       )}
     </div>

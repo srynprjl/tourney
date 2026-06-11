@@ -27,17 +27,17 @@ const Sidebar = () => {
   };
 
   const navItems = [
-    { name: "01. Dashboard", path: "/dashboard", icon: LayoutDashboard },
-    { name: "02. Arenas", path: "/tournaments", icon: Trophy },
-    { name: "03. Squads", path: "/teams", icon: Users },
+    { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+    { name: "Arenas", path: "/tournaments", icon: Trophy },
+    { name: "Squads", path: "/teams", icon: Users },
   ];
 
   if (user) {
-    navItems.push({ name: "04. Identity", path: `/player/${user.username}`, icon: Award });
+    navItems.push({ name: "Profile", path: `/player/${user.username}`, icon: Award });
   }
 
   if (user?.is_admin) {
-    navItems.push({ name: "05. Command", path: "/admin", icon: ShieldCheck });
+    navItems.push({ name: "Admin", path: "/admin", icon: ShieldCheck });
   }
 
   return (

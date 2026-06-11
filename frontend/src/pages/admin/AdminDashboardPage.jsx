@@ -85,15 +85,15 @@ const AdminDashboardPage = () => {
 
   if (loading) return (
     <div className="min-h-[400px] flex items-center justify-center font-bold tracking-tighter text-2xl animate-pulse uppercase">
-      Connecting to Overseer...
+      Loading Admin Panel...
     </div>
   );
 
   const tabs = [
-    { id: 'users', label: 'Identity', icon: Users },
+    { id: 'users', label: 'Users', icon: Users },
     { id: 'tournaments', label: 'Arenas', icon: Trophy },
-    { id: 'infrastructure', label: 'Nodes', icon: HeartPulse },
-    { id: 'reports', label: 'Signals', icon: AlertCircle },
+    { id: 'infrastructure', label: 'Services', icon: HeartPulse },
+    { id: 'reports', label: 'Reports', icon: AlertCircle },
   ];
 
   return (
@@ -102,16 +102,16 @@ const AdminDashboardPage = () => {
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-primary" />
-            <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Administrative Protocol</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">System Administration</span>
           </div>
-          <h1 className="text-6xl font-bold tracking-tighter uppercase leading-none">Overseer</h1>
+          <h1 className="text-6xl font-bold tracking-tighter uppercase leading-none">Admin</h1>
         </div>
         <Button 
           variant="outline" 
           className="px-8 font-black uppercase tracking-widest text-[10px] h-12" 
           onClick={() => { fetchData(); checkHealth(); }}
         >
-          <RefreshCw size={14} className="mr-2" /> Sync Ecosystem
+          <RefreshCw size={14} className="mr-2" /> Refresh System
         </Button>
       </header>
 
@@ -136,15 +136,15 @@ const AdminDashboardPage = () => {
            <div className="space-y-12">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border-t border-l">
                 <div className="p-10 border-r border-b hover:bg-accent/30 transition-colors group">
-                   <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 mb-8">01. Total Population</p>
+                   <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 mb-8">01. Total Users</p>
                    <p className="text-6xl font-bold tracking-tighter uppercase leading-none">{stats?.total_users || 0}</p>
                 </div>
                 <div className="p-10 border-r border-b hover:bg-accent/30 transition-colors group">
-                   <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 mb-8">02. Admin Units</p>
+                   <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 mb-8">02. Admins</p>
                    <p className="text-6xl font-bold tracking-tighter uppercase leading-none">{stats?.admin_count || 0}</p>
                 </div>
                 <div className="p-10 border-r border-b hover:bg-accent/30 transition-colors group">
-                   <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 mb-8">03. Blacklisted</p>
+                   <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 mb-8">03. Banned</p>
                    <p className="text-6xl font-bold tracking-tighter uppercase leading-none">{users.filter(u => u.is_banned).length}</p>
                 </div>
               </div>
@@ -153,10 +153,10 @@ const AdminDashboardPage = () => {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-background hover:bg-background border-none h-16">
-                      <TableHead className="pl-8 font-black uppercase text-[10px] tracking-widest border-r border-b">Identity</TableHead>
+                      <TableHead className="pl-8 font-black uppercase text-[10px] tracking-widest border-r border-b">Username</TableHead>
                       <TableHead className="font-black uppercase text-[10px] tracking-widest border-r border-b">Clearance</TableHead>
-                      <TableHead className="font-black uppercase text-[10px] tracking-widest border-r border-b">Integrity</TableHead>
-                      <TableHead className="text-right pr-8 font-black uppercase text-[10px] tracking-widest border-r border-b">Control</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest border-r border-b">Status</TableHead>
+                      <TableHead className="text-right pr-8 font-black uppercase text-[10px] tracking-widest border-r border-b">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -165,7 +165,7 @@ const AdminDashboardPage = () => {
                         <TableCell className="pl-8 border-r border-b">
                            <div className="flex flex-col">
                               <span className="font-bold text-lg tracking-tighter uppercase">{u.username}</span>
-                              <span className="text-[8px] font-black text-muted-foreground uppercase opacity-40 tracking-widest">UID: {u.id}</span>
+                              <span className="text-[8px] font-black text-muted-foreground uppercase opacity-40 tracking-widest">ID: {u.id}</span>
                            </div>
                         </TableCell>
                         <TableCell className="border-r border-b">
@@ -173,7 +173,7 @@ const AdminDashboardPage = () => {
                             "text-[8px] font-black uppercase tracking-widest border px-3 py-1",
                             u.is_admin ? "border-primary bg-primary text-primary-foreground" : "border-muted text-muted-foreground"
                           )}>
-                            {u.is_admin ? "ADMIN" : "CIVILIAN"}
+                            {u.is_admin ? "ADMIN" : "USER"}
                           </span>
                         </TableCell>
                         <TableCell className="border-r border-b">
@@ -181,14 +181,14 @@ const AdminDashboardPage = () => {
                             "text-[8px] font-black uppercase tracking-widest border px-3 py-1",
                             u.is_banned ? "border-red-600 bg-red-600 text-white" : "border-muted text-muted-foreground"
                           )}>
-                            {u.is_banned ? "TERMINATED" : "VERIFIED"}
+                            {u.is_banned ? "BANNED" : "ACTIVE"}
                           </span>
                         </TableCell>
                         <TableCell className="text-right pr-8 border-r border-b space-x-2">
                           <Button variant="outline" size="sm" className="w-10 h-10 border rounded-none p-0" title="Toggle Admin" onClick={() => toggleAdmin(u.id)}>
                             <Shield size={14} className={u.is_admin ? "text-primary" : "text-muted-foreground/30"} />
                           </Button>
-                          <Button variant="outline" size="sm" className="w-10 h-10 border rounded-none p-0" title={u.is_banned ? "Restore" : "Terminate"} onClick={() => toggleBan(u.id)}>
+                          <Button variant="outline" size="sm" className="w-10 h-10 border rounded-none p-0" title={u.is_banned ? "Restore" : "Ban"} onClick={() => toggleBan(u.id)}>
                             <Ban size={14} className={u.is_banned ? "text-red-600" : "text-muted-foreground/30"} />
                           </Button>
                         </TableCell>
@@ -218,7 +218,7 @@ const AdminDashboardPage = () => {
                       <Button asChild variant="outline" className="flex-1 font-black uppercase tracking-widest text-[10px] h-12">
                          <Link to={`/tournament/${t.id}`}>Enter Arena</Link>
                       </Button>
-                      <Button variant="outline" className="w-12 h-12 p-0 text-muted-foreground hover:text-red-600 border" onClick={() => { if(window.confirm('Terminate Arena?')) alert('Operation restricted'); }}>
+                      <Button variant="outline" className="w-12 h-12 p-0 text-muted-foreground hover:text-red-600 border" onClick={() => { if(window.confirm('Delete Arena?')) alert('Operation restricted'); }}>
                          <Trash2 size={16}/>
                       </Button>
                    </div>
@@ -237,7 +237,7 @@ const AdminDashboardPage = () => {
                   )} />
                   <div className="space-y-12">
                     <div className="flex justify-between items-start">
-                       <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20">Node {String(i + 1).padStart(2, '0')}</span>
+                       <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20">Service {String(i + 1).padStart(2, '0')}</span>
                        {s.status === 'healthy' ? <SignalHigh size={14} className="opacity-40" /> : <SignalLow size={14} className="text-red-600 animate-pulse" />}
                     </div>
                     <div className="space-y-2">
@@ -260,7 +260,7 @@ const AdminDashboardPage = () => {
 
         {activeTab === 'reports' && (
            <div className="py-32 text-center border-t border-b">
-              <h3 className="text-xs font-black uppercase tracking-[0.5em] opacity-30">No active signals detected</h3>
+              <h3 className="text-xs font-black uppercase tracking-[0.5em] opacity-30">No reports found</h3>
            </div>
         )}
       </div>

@@ -36,21 +36,21 @@ const RegisterPage = () => {
         <header className="space-y-6">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-primary" />
-            <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Enlistment Protocol</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Account Registration</span>
           </div>
           <div className="space-y-2">
             <h1 className="text-5xl font-bold tracking-tighter uppercase leading-none">Register</h1>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Establish your new operator identity in the system.</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Join the competition today.</p>
           </div>
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-8">
           <div className="space-y-6">
             <div className="space-y-3">
-              <Label htmlFor="username" className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Identity Key</Label>
+              <Label htmlFor="username" className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Username</Label>
               <Input 
                 id="username" 
-                placeholder="OPERATOR ID" 
+                placeholder="USERNAME" 
                 className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors uppercase font-bold tracking-widest text-xs"
                 value={username} 
                 onChange={(e) => setUsername(e.target.value)} 
@@ -58,7 +58,7 @@ const RegisterPage = () => {
               />
             </div>
             <div className="space-y-3">
-              <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Security Phrase</Label>
+              <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Password</Label>
               <Input 
                 id="password" 
                 type="password" 
@@ -72,18 +72,18 @@ const RegisterPage = () => {
           </div>
           
           <div className="space-y-8 pt-4">
-            <Button className="w-full font-black uppercase tracking-[0.3em] text-[10px] h-14" type="submit">Establish Link</Button>
+            <Button className="w-full font-black uppercase tracking-[0.3em] text-[10px] h-14" type="submit">Sign Up</Button>
             
             <div className="flex flex-col gap-4 text-center">
-              <Link to="/login" className="text-[10px] font-black uppercase tracking-[0.2em] hover:opacity-50 transition-opacity">Access Existing Link</Link>
-              <Link to="/" className="text-[10px] font-black uppercase tracking-[0.2em] opacity-30 hover:opacity-100 transition-opacity">← Back to Terminal</Link>
+              <Link to="/login" className="text-[10px] font-black uppercase tracking-[0.2em] hover:opacity-50 transition-opacity">Already have an account?</Link>
+              <Link to="/" className="text-[10px] font-black uppercase tracking-[0.2em] opacity-30 hover:opacity-100 transition-opacity">← Back home</Link>
             </div>
           </div>
         </form>
       </div>
       
       <div className="absolute bottom-12 text-[10px] font-black uppercase tracking-[0.5em] opacity-20">
-        TourneyPro // Enlistment Protocol Matrix
+        TourneyPro // Registration
       </div>
     </div>
   );

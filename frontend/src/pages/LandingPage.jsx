@@ -27,23 +27,23 @@ const LandingPage = () => {
           </div>
           <nav className="hidden lg:flex items-center gap-12 text-[10px] font-black uppercase tracking-[0.3em]">
             <a href="#features" className="hover:opacity-50 transition-opacity">Features</a>
-            <a href="#arenas" className="hover:opacity-50 transition-opacity">Sectors</a>
-            <a href="#stats" className="hover:opacity-50 transition-opacity">Telemetry</a>
-            {user && <Link to="/dashboard" className="hover:opacity-50 transition-opacity">Console</Link>}
+            <a href="#arenas" className="hover:opacity-50 transition-opacity">Arenas</a>
+            <a href="#stats" className="hover:opacity-50 transition-opacity">Stats</a>
+            {user && <Link to="/dashboard" className="hover:opacity-50 transition-opacity">Dashboard</Link>}
           </nav>
           <div className="flex items-center gap-8">
             {user ? (
               <>
-                <Button variant="ghost" size="sm" className="text-[10px] font-black uppercase tracking-[0.2em]" onClick={logout}>Exit</Button>
+                <Button variant="ghost" size="sm" className="text-[10px] font-black uppercase tracking-[0.2em]" onClick={logout}>Logout</Button>
                 <Link to="/dashboard">
-                  <Button size="sm" className="px-6 text-[10px] font-black uppercase tracking-[0.2em]">Console</Button>
+                  <Button size="sm" className="px-6 text-[10px] font-black uppercase tracking-[0.2em]">Dashboard</Button>
                 </Link>
               </>
             ) : (
               <>
                 <Link to="/login" className="text-[10px] font-black uppercase tracking-[0.2em] hover:opacity-50 transition-opacity">Login</Link>
                 <Link to="/register">
-                  <Button size="sm" className="px-6 text-[10px] font-black uppercase tracking-[0.2em]">Initialize</Button>
+                  <Button size="sm" className="px-6 text-[10px] font-black uppercase tracking-[0.2em]">Get Started</Button>
                 </Link>
               </>
             )}
@@ -57,21 +57,21 @@ const LandingPage = () => {
           <div className="max-w-4xl">
             <div className="flex items-center gap-2 mb-8">
               <div className="w-2 h-2 bg-primary animate-pulse" />
-              <span className="text-xs font-bold tracking-[0.3em] uppercase opacity-60">System Operational // v2026.4.1</span>
+              <span className="text-[10px] font-bold tracking-[0.3em] uppercase opacity-60">Season 2026 // Registration Open</span>
             </div>
             <h1 className="text-6xl md:text-9xl font-bold tracking-tighter mb-12 uppercase leading-[0.9]">
-              Tournament<br />Infrastructure.
+              Tournament<br />Management.
             </h1>
             <p className="text-xl text-muted-foreground mb-16 leading-tight max-w-xl font-medium">
-              High-performance microservice architecture for seamless competition orchestration at scale.
+              Create, manage, and scale your football tournaments with professional-grade tools. Built for organizers, loved by players.
             </p>
             <div className="flex flex-wrap gap-6">
               <Link to={user ? "/dashboard" : "/register"}>
                 <Button size="lg" className="px-12 font-bold tracking-widest uppercase">
-                  {user ? "Dashboard" : "Initialize"}
+                  {user ? "Dashboard" : "Start Tournament"}
                 </Button>
               </Link>
-              <Button variant="outline" size="lg" className="px-12 font-bold tracking-widest uppercase">Docs</Button>
+              <Button variant="outline" size="lg" className="px-12 font-bold tracking-widest uppercase">Browse</Button>
             </div>
           </div>
         </div>
@@ -84,23 +84,23 @@ const LandingPage = () => {
             {[
               {
                 id: "01",
-                title: "Distributed Core",
-                desc: "Decoupled microservices ensure operational continuity across global clusters."
+                title: "Easy Organizing",
+                desc: "Create knockout or group stage tournaments in seconds with our automated scheduler."
               },
               {
                 id: "02",
-                title: "Instant Sync",
-                desc: "Sub-10ms synchronization via bidirectional WebSocket protocols."
+                title: "Live Scores",
+                desc: "Real-time match updates and instant table standings for all participants."
               },
               {
                 id: "03",
-                title: "Unit Command",
-                desc: "Granular control over team rosters and administrative clearance levels."
+                title: "Team Control",
+                desc: "Powerful tools for roster control, player registration, and team stats."
               },
               {
                 id: "04",
-                title: "Data Matrix",
-                desc: "Exhaustive telemetry for every match event and player action."
+                title: "Full Statistics",
+                desc: "Track every goal, assist, and card with exhaustive historical data."
               }
             ].map((feature, i) => (
               <div key={i} className="p-10 border-r border-b hover:bg-accent/30 transition-colors group">
@@ -120,12 +120,12 @@ const LandingPage = () => {
         <div className="container mx-auto px-6">
           <div className="flex flex-col md:flex-row items-end justify-between mb-24 gap-8">
             <div className="max-w-xl">
-              <h2 className="text-4xl font-bold mb-6 tracking-tighter uppercase">Active Sectors</h2>
-              <p className="text-muted-foreground uppercase text-xs font-bold tracking-[0.2em]">Join one of our active competition sectors and prove your skill on the global stage.</p>
+              <h2 className="text-4xl font-bold mb-6 tracking-tighter uppercase">Active Arenas</h2>
+              <p className="text-muted-foreground uppercase text-xs font-bold tracking-[0.2em]">Join one of our active football leagues and prove your skill on the global stage.</p>
             </div>
             <Link to="/tournaments">
               <Button variant="outline" className="px-10 font-bold uppercase tracking-widest">
-                All Sectors
+                All Arenas
               </Button>
             </Link>
           </div>
@@ -134,7 +134,7 @@ const LandingPage = () => {
             {[
               {
                 title: "Shadow Protocol",
-                status: "Operational",
+                status: "Ongoing",
                 players: "2,400",
                 img: "https://images.unsplash.com/photo-1542751110-97427bbecf20?auto=format&fit=crop&q=80&w=1000"
               },
@@ -163,7 +163,7 @@ const LandingPage = () => {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.4em]">{arena.players} Units</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.4em]">{arena.players} Players</p>
                   <h3 className="text-2xl font-bold uppercase tracking-tighter">{arena.title}</h3>
                 </div>
               </div>
@@ -177,10 +177,10 @@ const LandingPage = () => {
         <div className="container mx-auto px-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-12">
             {[
-              { label: "Operations Run", value: "12,400+" },
-              { label: "Engaged Units", value: "850k+" },
-              { label: "Active Signals", value: "45.2k" },
-              { label: "Awarded Capital", value: "$2.4M" }
+              { label: "Matches Played", value: "12,400+" },
+              { label: "Total Players", value: "850k+" },
+              { label: "Active Today", value: "45.2k" },
+              { label: "Prize Money", value: "$2.4M" }
             ].map((stat, i) => (
               <div key={i} className="space-y-4">
                 <p className="text-[10px] font-bold uppercase tracking-[0.4em] opacity-40">{stat.label}</p>
@@ -201,16 +201,16 @@ const LandingPage = () => {
                 <span className="font-bold text-3xl tracking-tighter uppercase">TourneyPro</span>
               </div>
               <p className="text-muted-foreground max-w-sm leading-tight font-medium uppercase text-xs tracking-widest opacity-60">
-                The next generation of competitive infrastructure. Modern, reliable, and distributed.
+                The next generation of tournament management. Professional, reliable, and competitive.
               </p>
             </div>
             <div className="md:col-span-3 space-y-6">
-              <h4 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-40">Command</h4>
+              <h4 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-40">App</h4>
               <ul className="space-y-3 text-xs font-bold uppercase tracking-widest">
                 <li><a href="#" className="hover:opacity-50 transition-opacity">Arenas</a></li>
                 <li><a href="#" className="hover:opacity-50 transition-opacity">Squads</a></li>
-                <li><a href="#" className="hover:opacity-50 transition-opacity">Telemetry</a></li>
-                <li><a href="#" className="hover:opacity-50 transition-opacity">API Matrix</a></li>
+                <li><a href="#" className="hover:opacity-50 transition-opacity">Stats</a></li>
+                <li><a href="#" className="hover:opacity-50 transition-opacity">Docs</a></li>
               </ul>
             </div>
             <div className="md:col-span-3 space-y-6">

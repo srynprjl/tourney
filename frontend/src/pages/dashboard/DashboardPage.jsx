@@ -74,13 +74,13 @@ const DashboardPage = () => {
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-primary" />
-            <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">System Overview</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Account Overview</span>
           </div>
-          <h1 className="text-6xl font-bold tracking-tighter uppercase leading-none">Console</h1>
+          <h1 className="text-6xl font-bold tracking-tighter uppercase leading-none">Dashboard</h1>
         </div>
         <div className="flex items-center gap-6">
           <div className="text-right">
-            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] mb-1">Operator ID</p>
+            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] mb-1">Operator</p>
             <p className="text-sm font-bold uppercase tracking-widest">{user?.username}</p>
           </div>
           <div className="w-12 h-12 border flex items-center justify-center">
@@ -92,8 +92,8 @@ const DashboardPage = () => {
       {/* Primary Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-0 border-t border-l">
         <StatCard title="Total Arenas" value={stats.totalArenas} id="01" trend="+2 NEW" />
-        <StatCard title="My Deployments" value={stats.myArenas} id="02" trend="ACTIVE" />
-        <StatCard title="Active Squads" value={stats.myTeams} id="03" trend="ENGAGED" />
+        <StatCard title="My Arenas" value={stats.myArenas} id="02" trend="ACTIVE" />
+        <StatCard title="Teams" value={stats.myTeams} id="03" trend="ENGAGED" />
         <StatCard title="Live Matches" value={stats.activeMatches} id="04" trend="REAL-TIME" />
       </div>
 
@@ -101,32 +101,32 @@ const DashboardPage = () => {
         <div className="lg:col-span-2 space-y-12">
           <section className="space-y-8">
             <div className="flex items-center justify-between border-b pb-4">
-              <h2 className="text-xs font-black uppercase tracking-[0.4em] opacity-40">System Matrix</h2>
+              <h2 className="text-xs font-black uppercase tracking-[0.4em] opacity-40">Recent Arenas</h2>
               <Link to="/tournaments" className="text-[10px] font-black uppercase tracking-[0.2em] hover:opacity-50 transition-opacity">
-                All Sectors →
+                All Arenas →
               </Link>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
               <div className="space-y-6">
-                <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20 block">Sector A-1</span>
-                <h3 className="text-2xl font-bold uppercase tracking-tighter">Championship Potential</h3>
+                <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20 block">Slot A-1</span>
+                <h3 className="text-2xl font-bold uppercase tracking-tighter">My Teams</h3>
                 <p className="text-sm text-muted-foreground leading-tight font-medium uppercase tracking-wider opacity-80">
-                  Your units are currently engaged in {stats.myTeams} different sectors. Maintain tactical excellence to climb the ranks.
+                  You are currently active in {stats.myTeams} different teams. Manage your rosters and schedules.
                 </p>
                 <Button className="w-full font-black uppercase tracking-widest text-[10px] h-12" variant="outline" asChild>
-                  <Link to="/teams">Manage Squads</Link>
+                  <Link to="/teams">Manage Teams</Link>
                 </Button>
               </div>
 
               <div className="space-y-6">
-                <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20 block">Sector A-2</span>
-                <h3 className="text-2xl font-bold uppercase tracking-tighter">Tactical Deployment</h3>
+                <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20 block">Slot A-2</span>
+                <h3 className="text-2xl font-bold uppercase tracking-tighter">Create Arena</h3>
                 <p className="text-sm text-muted-foreground leading-tight font-medium uppercase tracking-wider opacity-80">
-                  Operational clearance confirmed for {stats.myArenas} arena deployments. Total global network expansion is currently at {stats.totalArenas}.
+                  You have created {stats.myArenas} arenas. Total network arenas: {stats.totalArenas}.
                 </p>
                 <Button variant="outline" className="w-full font-black uppercase tracking-widest text-[10px] h-12" asChild>
-                  <Link to="/tournaments">Arena Command</Link>
+                  <Link to="/tournaments">Create Arena</Link>
                 </Button>
               </div>
             </div>
@@ -136,7 +136,7 @@ const DashboardPage = () => {
         <div className="space-y-12">
           <section className="space-y-8">
             <h2 className="text-xs font-black uppercase tracking-[0.4em] opacity-40 border-b pb-4">
-              Activity Signals
+              Latest Activity
             </h2>
             <div className="divide-y border-t border-b">
               {stats.recentActivity.map((activity) => (
@@ -150,7 +150,7 @@ const DashboardPage = () => {
               ))}
               {stats.recentActivity.length === 0 && (
                 <div className="py-12 text-center">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40">No active signals.</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-40">No activity.</p>
                 </div>
               )}
             </div>
@@ -159,16 +159,16 @@ const DashboardPage = () => {
           <div className="border p-10 space-y-8">
              <Award size={32} strokeWidth={2.5} />
              <div className="space-y-4">
-                <h3 className="text-2xl font-bold uppercase tracking-tighter">Elite Clearance</h3>
-                <p className="text-[10px] font-bold uppercase tracking-widest leading-tight opacity-60">Your operator status allows for unrestricted arena orchestration and unit deployment.</p>
+                <h3 className="text-2xl font-bold uppercase tracking-tighter">Rank Status</h3>
+                <p className="text-[10px] font-bold uppercase tracking-widest leading-tight opacity-60">Your current standing allows for unlimited arena creation and team entry.</p>
              </div>
              <div className="space-y-3">
                 <div className="h-[2px] bg-muted w-full overflow-hidden">
                    <div className="h-full bg-primary w-3/4" />
                 </div>
                 <div className="flex justify-between text-[10px] font-black uppercase tracking-[0.3em] opacity-40">
-                   <span>Tier 07</span>
-                   <span>85% COMPLETE</span>
+                   <span>Level 07</span>
+                   <span>85% Progress</span>
                 </div>
              </div>
           </div>
