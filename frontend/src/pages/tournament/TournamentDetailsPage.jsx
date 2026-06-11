@@ -299,7 +299,7 @@ const TournamentDetailsPage = () => {
 
   if (!tournament)
     return (
-      <div className="p-24 text-center font-black uppercase tracking-[0.5em] animate-pulse">
+      <div className="min-h-[400px] flex items-center justify-center font-medium text-muted-foreground animate-pulse">
         Initializing Sector Intelligence...
       </div>
     );
@@ -318,11 +318,11 @@ const TournamentDetailsPage = () => {
     }, {}) || {};
 
   const getRoundName = (round, stage, totalRoundsInStage) => {
-    if (stage === "Group Phase") return `MATCHDAY_${round}`;
-    if (round === totalRoundsInStage) return "GRAND_FINAL";
-    if (round === totalRoundsInStage - 1) return "SEMIFINALS";
-    if (round === totalRoundsInStage - 2) return "QUARTERFINALS";
-    return `ROUND_${round}`;
+    if (stage === "Group Phase") return `Matchday ${round}`;
+    if (round === totalRoundsInStage) return "Grand Final";
+    if (round === totalRoundsInStage - 1) return "Semifinals";
+    if (round === totalRoundsInStage - 2) return "Quarterfinals";
+    return `Round ${round}`;
   };
 
   const groupedStandings = standings.reduce((acc, s) => {
@@ -333,12 +333,12 @@ const TournamentDetailsPage = () => {
   }, {});
 
   const tabs = [
-    { id: "matches", label: "01. Matches", icon: Calendar },
-    { id: "standings", label: "02. Matrix", icon: Trophy },
-    { id: "teams", label: "03. Squads", icon: Users },
-    { id: "news", label: "04. Comms", icon: Newspaper },
-    { id: "info", label: "05. Intel", icon: ScrollText },
-    { id: "live", label: "06. Stream", icon: Tv },
+    { id: "matches", label: "Matches", icon: Calendar },
+    { id: "standings", label: "Matrix", icon: Trophy },
+    { id: "teams", label: "Squads", icon: Users },
+    { id: "news", label: "Comms", icon: Newspaper },
+    { id: "info", label: "Intel", icon: ScrollText },
+    { id: "live", label: "Stream", icon: Tv },
   ].filter((tab) => {
     if (tab.id === "standings" && tournament?.type === "knockout") return false;
     return true;
@@ -355,98 +355,91 @@ const TournamentDetailsPage = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto py-12 px-4 space-y-20">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-12 border-l-8 border-foreground pl-12 py-4">
-        <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <h1 className="text-6xl font-black tracking-tighter italic uppercase leading-none">
+    <div className="space-y-10 pb-12">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <h1 className="text-4xl font-bold tracking-tight">
               {tournament.name}
             </h1>
-            <Badge variant="outline">{tournament.sport}</Badge>
+            <Badge variant="secondary" className="capitalize">{tournament.sport}</Badge>
           </div>
-          <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-[0.3em] opacity-50 italic">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground font-medium">
             {tournament.is_public ? (
-              <span className="flex items-center gap-2 text-foreground">
-                <Globe size={14} /> Global Access
+              <span className="flex items-center gap-1.5">
+                <Globe size={14} className="text-primary" /> Global Access
               </span>
             ) : (
-              <span className="flex items-center gap-2 text-foreground">
-                <Lock size={14} /> Restricted Sector
+              <span className="flex items-center gap-1.5">
+                <Lock size={14} className="text-primary" /> Restricted Sector
               </span>
             )}
-            <Separator
-              orientation="vertical"
-              className="h-4 w-0.5 bg-foreground"
-            />
-            <span>Format: {tournament.type}</span>
-            <Separator
-              orientation="vertical"
-              className="h-4 w-0.5 bg-foreground"
-            />
-            <span>ID: {String(tournament.id || "").split("-")[0]}</span>
+            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+            <span className="capitalize">Format: {tournament.type}</span>
+            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+            <span className="font-mono text-xs opacity-70">ID: {String(tournament.id || "").split("-")[0]}</span>
           </div>
         </div>
 
         {isOwner && (
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-2">
             <Button
               onClick={handleDeleteTournament}
               variant="outline"
-              className="h-20 w-20 border-2"
+              size="icon"
+              className="text-destructive hover:bg-destructive/10"
             >
-              <Trash2 size={24} strokeWidth={2.5} />
+              <Trash2 size={18} />
             </Button>
             {tournament.type === "group" && tournament.matches?.length > 0 && (
               <Button
                 onClick={promote}
                 variant="outline"
-                className="h-20 px-8 border-2 font-black italic"
+                className="font-semibold"
               >
-                PROMOTE_UNITS
+                Promote Units
               </Button>
             )}
             <Button
               onClick={generate}
-              className="h-20 px-10 font-black italic uppercase italic tracking-tighter"
+              className="font-semibold"
             >
-              {tournament.matches?.length > 0 ? "REGEN_ENGINE" : "INIT_ARENA"}
+              {tournament.matches?.length > 0 ? "Regenerate Engine" : "Initialize Arena"}
             </Button>
           </div>
         )}
-      </div>
+      </header>
 
-      <div className="flex flex-wrap gap-1 bg-foreground border-2 border-foreground sticky top-0 z-40">
+      <div className="flex p-1 bg-muted rounded-xl w-fit overflow-x-auto max-w-full no-scrollbar sticky top-0 z-40 shadow-sm border">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             className={cn(
-              "flex-1 p-6 text-[10px] font-black uppercase tracking-[0.3em] transition-colors",
+              "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap",
               activeTab === tab.id
-                ? "bg-background text-foreground"
-                : "bg-foreground text-background hover:bg-muted/10",
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
             )}
             onClick={() => setActiveTab(tab.id)}
           >
+            <tab.icon size={16} />
             {tab.label}
           </button>
         ))}
       </div>
 
-      <div className="mt-12">
+      <div className="mt-8">
         {activeTab === "matches" && (
-          <div className="space-y-32">
+          <div className="space-y-16">
             {Object.keys(groupedMatches).length === 0 ? (
-              <div className="py-48 text-center border-4 border-foreground border-dashed max-w-2xl mx-auto space-y-12">
-                <Activity
-                  size={80}
-                  strokeWidth={1}
-                  className="mx-auto opacity-10"
-                />
-                <p className="text-3xl font-black uppercase tracking-tighter italic opacity-20">
-                  Engine_Awaiting_Initialization
-                </p>
+              <div className="py-24 text-center border-2 border-dashed rounded-2xl bg-muted/20 max-w-2xl mx-auto space-y-6">
+                <Activity size={48} className="mx-auto text-muted-foreground/30" />
+                <div className="space-y-2">
+                  <h3 className="text-lg font-semibold text-muted-foreground">Engine Awaiting Initialization</h3>
+                  <p className="text-sm text-muted-foreground/60">Generate the match bracket to start the competition.</p>
+                </div>
                 {isOwner && (
-                  <Button onClick={generate} size="lg" className="h-20 px-12">
+                  <Button onClick={generate} className="font-semibold">
                     Start Match Engine
                   </Button>
                 )}
@@ -455,22 +448,23 @@ const TournamentDetailsPage = () => {
               Object.keys(groupedMatches)
                 .reverse()
                 .map((stage) => (
-                  <div key={stage} className="space-y-16">
-                    <h2 className="text-5xl font-black uppercase italic tracking-tighter border-b-8 border-foreground pb-4">
-                      {stage}
-                    </h2>
+                  <div key={stage} className="space-y-10">
+                    <div className="flex items-center gap-4">
+                       <h2 className="text-2xl font-bold tracking-tight">{stage}</h2>
+                       <div className="h-px flex-1 bg-border" />
+                    </div>
                     {Object.keys(groupedMatches[stage])
                       .sort((a, b) => parseInt(a) - parseInt(b))
                       .map((round) => (
-                        <div key={round} className="space-y-8">
-                          <h3 className="text-[10px] font-black opacity-30 uppercase tracking-[0.5em] flex items-center gap-6">
+                        <div key={round} className="space-y-6">
+                          <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 flex items-center gap-3">
                             {getRoundName(
                               parseInt(round),
                               stage,
                               Object.keys(groupedMatches[stage]).length,
                             )}
                           </h3>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-1 bg-foreground border-2 border-foreground">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {groupedMatches[stage][round].map((match) => {
                               const t1 = tournament.teams.find(
                                 (t) => t.squad_id === match.team1_id,
@@ -483,8 +477,8 @@ const TournamentDetailsPage = () => {
                                 <Card
                                   key={match.id}
                                   className={cn(
-                                    "border-none p-10 bg-background rounded-none hover:bg-muted transition-colors",
-                                    isOwner && "cursor-pointer",
+                                    "group transition-all hover:shadow-md overflow-hidden",
+                                    isOwner && "cursor-pointer border-primary/20 hover:border-primary/40",
                                   )}
                                   onClick={() => {
                                     if (isOwner) {
@@ -495,43 +489,47 @@ const TournamentDetailsPage = () => {
                                     }
                                   }}
                                 >
-                                  <div className="space-y-8">
-                                    <div className="flex justify-between items-center">
-                                      <span
-                                        className={cn(
-                                          "text-2xl font-black italic uppercase truncate",
-                                          match.winner_id === match.team1_id
-                                            ? "underline decoration-4 underline-offset-8"
-                                            : "opacity-60",
-                                        )}
-                                      >
-                                        {t1?.name || "TBD"}
-                                      </span>
-                                      <div className="text-4xl font-black italic">
-                                        {match.team1_score}
+                                  <div className="p-5 space-y-4">
+                                    <div className="space-y-3">
+                                      <div className="flex justify-between items-center">
+                                        <span
+                                          className={cn(
+                                            "text-sm font-semibold truncate flex-1",
+                                            match.winner_id === match.team1_id
+                                              ? "text-foreground"
+                                              : "text-muted-foreground",
+                                          )}
+                                        >
+                                          {t1?.name || "TBD"}
+                                          {match.winner_id === match.team1_id && <Badge variant="secondary" className="ml-2 py-0 h-4 text-[10px]">W</Badge>}
+                                        </span>
+                                        <div className="text-xl font-bold tabular-nums">
+                                          {match.team1_score}
+                                        </div>
+                                      </div>
+                                      <div className="flex justify-between items-center">
+                                        <span
+                                          className={cn(
+                                            "text-sm font-semibold truncate flex-1",
+                                            match.winner_id === match.team2_id
+                                              ? "text-foreground"
+                                              : "text-muted-foreground",
+                                          )}
+                                        >
+                                          {t2?.name || "TBD"}
+                                          {match.winner_id === match.team2_id && <Badge variant="secondary" className="ml-2 py-0 h-4 text-[10px]">W</Badge>}
+                                        </span>
+                                        <div className="text-xl font-bold tabular-nums">
+                                          {match.team2_score}
+                                        </div>
                                       </div>
                                     </div>
-                                    <div className="flex justify-between items-center">
-                                      <span
-                                        className={cn(
-                                          "text-2xl font-black italic uppercase truncate",
-                                          match.winner_id === match.team2_id
-                                            ? "underline decoration-4 underline-offset-8"
-                                            : "opacity-60",
-                                        )}
-                                      >
-                                        {t2?.name || "TBD"}
-                                      </span>
-                                      <div className="text-4xl font-black italic">
-                                        {match.team2_score}
-                                      </div>
-                                    </div>
-                                    <div className="pt-6 border-t-2 border-foreground/10 flex justify-between items-center">
-                                      <Badge variant="outline">
+                                    <div className="pt-4 border-t flex justify-between items-center">
+                                      <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider h-5">
                                         {match.status}
                                       </Badge>
                                       {match.group_name && (
-                                        <span className="text-[10px] font-black opacity-40 uppercase tracking-widest">
+                                        <span className="text-[10px] font-medium text-muted-foreground">
                                           Sector {match.group_name}
                                         </span>
                                       )}
@@ -548,35 +546,32 @@ const TournamentDetailsPage = () => {
             )}
 
             <Dialog open={scoreModalOpen} onOpenChange={setScoreModalOpen}>
-              <DialogContent>
+              <DialogContent className="max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Override Result</DialogTitle>
+                  <DialogTitle>Update Match Result</DialogTitle>
+                  <DialogDescription>Override the current match scores manually.</DialogDescription>
                 </DialogHeader>
                 {editingMatch && (
                   <form
                     onSubmit={handleUpdateScore}
-                    className="space-y-12 py-8"
+                    className="space-y-8 pt-4"
                   >
-                    <div className="grid grid-cols-2 gap-8">
-                      <div className="space-y-4">
-                        <Label className="text-center block">
-                          Team 1 Score
-                        </Label>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label className="text-center block text-xs uppercase tracking-wider text-muted-foreground">Team 1</Label>
                         <Input
                           type="number"
-                          className="h-20 text-4xl text-center"
+                          className="h-14 text-2xl text-center font-bold"
                           value={editScore1}
                           onChange={(e) => setEditScore1(e.target.value)}
                           required
                         />
                       </div>
-                      <div className="space-y-4">
-                        <Label className="text-center block">
-                          Team 2 Score
-                        </Label>
+                      <div className="space-y-2">
+                        <Label className="text-center block text-xs uppercase tracking-wider text-muted-foreground">Team 2</Label>
                         <Input
                           type="number"
-                          className="h-20 text-4xl text-center"
+                          className="h-14 text-2xl text-center font-bold"
                           value={editScore2}
                           onChange={(e) => setEditScore2(e.target.value)}
                           required
@@ -584,12 +579,7 @@ const TournamentDetailsPage = () => {
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button
-                        type="submit"
-                        className="w-full h-20 text-xl italic uppercase"
-                      >
-                        Finalize Override
-                      </Button>
+                      <Button type="submit" className="w-full">Finalize Scores</Button>
                     </DialogFooter>
                   </form>
                 )}
@@ -599,195 +589,192 @@ const TournamentDetailsPage = () => {
         )}
 
         {activeTab === "standings" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 bg-foreground border-2 border-foreground">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {Object.keys(groupedStandings)
               .sort()
               .map((groupName) => (
-                <Card key={groupName} className="border-none rounded-none p-0">
-                  <CardHeader className="bg-secondary p-8 border-none">
-                    <CardTitle className="text-3xl tracking-tighter italic uppercase">
-                      {groupName === "Overall"
-                        ? "Global Matrix"
-                        : `Sector_${groupName}`}
+                <Card key={groupName} className="overflow-hidden border-muted/60">
+                  <CardHeader className="bg-muted/50 pb-4">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Trophy size={18} className="text-primary" />
+                      {groupName === "Overall" ? "Global Matrix" : `Sector ${groupName}`}
                     </CardTitle>
                   </CardHeader>
+                  <div className="border-t">
                   <Table>
                     <TableHeader>
-                      <TableRow className="h-16">
-                        <TableHead>Competitor</TableHead>
+                      <TableRow>
+                        <TableHead className="w-[50%]">Competitor</TableHead>
                         <TableHead className="text-center">P</TableHead>
                         <TableHead className="text-center">GD</TableHead>
-                        <TableHead className="text-center">Points</TableHead>
+                        <TableHead className="text-center">Pts</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {groupedStandings[groupName]
                         .sort((a, b) => b.points - a.points || b.gd - a.gd)
-                        .map((s) => (
-                          <TableRow key={s.team_id} className="h-20">
-                            <TableCell className="text-xl font-black italic uppercase">
+                        .map((s, idx) => (
+                          <TableRow key={s.team_id}>
+                            <TableCell className="font-semibold text-sm">
+                              <span className="text-muted-foreground mr-2 font-mono text-xs">{idx + 1}.</span>
                               {s.team_name}
                             </TableCell>
-                            <TableCell className="text-center opacity-40">
+                            <TableCell className="text-center text-muted-foreground text-xs">
                               {s.played}
                             </TableCell>
-                            <TableCell className="text-center font-black">
+                            <TableCell className="text-center text-sm font-medium">
                               {s.gd > 0 ? `+${s.gd}` : s.gd}
                             </TableCell>
-                            <TableCell className="text-center text-3xl font-black italic">
+                            <TableCell className="text-center font-bold">
                               {s.points}
                             </TableCell>
                           </TableRow>
                         ))}
                     </TableBody>
                   </Table>
+                  </div>
                 </Card>
               ))}
           </div>
         )}
 
         {activeTab === "teams" && (
-          <div className="max-w-4xl mx-auto space-y-20">
-            <header className="flex justify-between items-end border-b-8 border-foreground pb-6">
-              <div className="space-y-2">
-                <h2 className="text-5xl font-black uppercase italic tracking-tighter leading-none">
-                  Squad Roster
-                </h2>
-                <p className="text-[10px] font-black uppercase tracking-widest opacity-40">
-                  {tournament.teams?.length} / {tournament.max_teams} units
-                  enlisted
+          <div className="max-w-4xl mx-auto space-y-8">
+            <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h2 className="text-2xl font-bold tracking-tight">Squad Roster</h2>
+                <p className="text-sm text-muted-foreground">
+                  {tournament.teams?.length} / {tournament.max_teams} units enlisted in this sector.
                 </p>
               </div>
 
-              {isOwner && (
-                <Dialog open={teamModalOpen} onOpenChange={setTeamModalOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="lg" className="h-16 gap-4 font-black italic">
-                      <Plus size={20} strokeWidth={3} /> MANUAL_ENTRY
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Enlist Squad</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleAddTeam} className="space-y-8 py-6">
-                      <div className="space-y-4">
-                        <Label>Competitor Name</Label>
-                        <Input
-                          placeholder="E.G. ALPHA_UNIT"
-                          className="h-16"
-                          value={teamName}
-                          onChange={(e) => setTeamName(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <DialogFooter>
-                        <Button
-                          type="submit"
-                          className="w-full h-16 text-lg italic"
-                        >
-                          Commit Squad
-                        </Button>
-                      </DialogFooter>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              )}
-
-              {tournament.mode === "registration" && (
-                <Dialog
-                  open={registerModalOpen}
-                  onOpenChange={(v) => {
-                    setRegisterModalOpen(v);
-                    if (v) fetchMyTeams();
-                  }}
-                >
-                  <DialogTrigger asChild>
-                    <Button size="lg" className="h-16 gap-4 font-black italic">
-                      <UserPlus size={20} strokeWidth={3} /> REGISTER_MY_UNIT
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>Arena Registration</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleRegister} className="space-y-12 py-8">
-                      <div className="grid gap-2">
-                        {myTeams
-                          .filter((t) => t.sport === tournament.sport)
-                          .map((t) => (
-                            <div
-                              key={t.id}
-                              onClick={() => setSelectedTeamId(t.id)}
-                              className={cn(
-                                "p-8 border-2 cursor-pointer font-black uppercase tracking-tight text-xl italic transition-all",
-                                selectedTeamId === t.id
-                                  ? "bg-foreground text-background"
-                                  : "hover:bg-muted",
-                              )}
-                            >
-                              {t.name}
-                            </div>
-                          ))}
-                      </div>
-                      {!tournament.is_public && (
-                        <div className="space-y-4">
-                          <Label>Security Code</Label>
+              <div className="flex gap-2">
+                {isOwner && (
+                  <Dialog open={teamModalOpen} onOpenChange={setTeamModalOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="gap-2">
+                        <Plus size={16} /> Manual Entry
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Enlist Squad</DialogTitle>
+                        <DialogDescription>Manually add a competitor to this tournament.</DialogDescription>
+                      </DialogHeader>
+                      <form onSubmit={handleAddTeam} className="space-y-6 pt-4">
+                        <div className="space-y-2">
+                          <Label>Competitor Name</Label>
                           <Input
-                            placeholder="Input Sector Code"
-                            className="h-16"
-                            value={joinCode}
-                            onChange={(e) => setJoinCode(e.target.value)}
+                            placeholder="e.g. Alpha Unit"
+                            value={teamName}
+                            onChange={(e) => setTeamName(e.target.value)}
                             required
                           />
                         </div>
-                      )}
-                      <DialogFooter>
-                        <Button
-                          type="submit"
-                          className="w-full h-20 text-xl italic"
-                          disabled={!selectedTeamId}
-                        >
-                          Verify & Enlist
-                        </Button>
-                      </DialogFooter>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              )}
+                        <DialogFooter>
+                          <Button type="submit" className="w-full">Commit Squad</Button>
+                        </DialogFooter>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                )}
+
+                {tournament.mode === "registration" && (
+                  <Dialog
+                    open={registerModalOpen}
+                    onOpenChange={(v) => {
+                      setRegisterModalOpen(v);
+                      if (v) fetchMyTeams();
+                    }}
+                  >
+                    <DialogTrigger asChild>
+                      <Button size="sm" className="gap-2">
+                        <UserPlus size={16} /> Register My Unit
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Arena Registration</DialogTitle>
+                        <DialogDescription>Select one of your squads to enlist in this arena.</DialogDescription>
+                      </DialogHeader>
+                      <form onSubmit={handleRegister} className="space-y-6 pt-4">
+                        <div className="space-y-2">
+                          <Label>Select Squad</Label>
+                          <div className="grid gap-2 max-h-[200px] overflow-y-auto p-1">
+                            {myTeams
+                              .filter((t) => t.sport === tournament.sport)
+                              .map((t) => (
+                                <div
+                                  key={t.id}
+                                  onClick={() => setSelectedTeamId(t.id)}
+                                  className={cn(
+                                    "p-3 rounded-lg border-2 cursor-pointer text-sm font-semibold transition-all",
+                                    selectedTeamId === t.id
+                                      ? "bg-primary/5 border-primary text-primary"
+                                      : "hover:bg-muted border-transparent",
+                                  )}
+                                >
+                                  {t.name}
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                        {!tournament.is_public && (
+                          <div className="space-y-2">
+                            <Label>Access Code</Label>
+                            <Input
+                              placeholder="Enter Sector Code"
+                              value={joinCode}
+                              onChange={(e) => setJoinCode(e.target.value)}
+                              required
+                            />
+                          </div>
+                        )}
+                        <DialogFooter>
+                          <Button
+                            type="submit"
+                            className="w-full"
+                            disabled={!selectedTeamId}
+                          >
+                            Verify & Enlist
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </div>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-1 bg-foreground border-2 border-foreground">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {tournament.teams?.map((t) => (
-                <Card
-                  key={t.id}
-                  className="p-10 border-none bg-background rounded-none hover:bg-muted transition-colors flex flex-col justify-between h-64"
-                >
-                  <div className="space-y-2">
-                    <h3 className="text-4xl font-black uppercase italic tracking-tighter leading-none">
-                      {t.name}
-                    </h3>
-                    <Badge variant="outline">
-                      {t.group_name ? `Sector ${t.group_name}` : "UNASSIGNED"}
-                    </Badge>
+                <Card key={t.id} className="group hover:shadow-md transition-all flex flex-col justify-between overflow-hidden">
+                  <div className="p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <h3 className="text-lg font-bold truncate leading-none pt-1">{t.name}</h3>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {t.group_name ? `Sector ${t.group_name}` : "Pending"}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                       <Activity size={12} className="text-primary" />
+                       <span>Active Protocol</span>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="p-4 bg-muted/30 border-t flex gap-2">
                     {!t.is_manual && (
-                      <Button
-                        asChild
-                        variant="outline"
-                        className="flex-1 h-14 border-2 font-black italic"
-                      >
-                        <Link to={`/team/${t.squad_id}`}>VIEW_INTEL</Link>
+                      <Button asChild variant="ghost" size="sm" className="flex-1 text-xs">
+                        <Link to={`/team/${t.squad_id}`}>View Intel</Link>
                       </Button>
                     )}
                     {isOwner && (
                       <Button
-                        variant="outline"
-                        className="h-14 w-14 border-2 text-destructive"
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:bg-destructive/10"
                         onClick={() => handleRemoveTeam(t.id)}
                       >
-                        <Trash2 size={20} />
+                        <Trash2 size={16} />
                       </Button>
                     )}
                   </div>
@@ -798,157 +785,142 @@ const TournamentDetailsPage = () => {
         )}
 
         {activeTab === "news" && (
-          <div className="max-w-3xl mx-auto space-y-24">
-            <header className="flex justify-between items-end border-b-8 border-foreground pb-6">
-              <h2 className="text-5xl font-black uppercase italic tracking-tighter leading-none">
-                Comms Feed
-              </h2>
+          <div className="max-w-3xl mx-auto space-y-10">
+            <header className="flex items-center justify-between border-b pb-6">
+              <h2 className="text-2xl font-bold tracking-tight">Comms Feed</h2>
               {isOwner && (
                 <Dialog open={newsModalOpen} onOpenChange={setNewsModalOpen}>
                   <DialogTrigger asChild>
-                    <Button
-                      size="lg"
-                      className="h-16 italic font-black uppercase"
-                    >
-                      Push Broadcast
+                    <Button size="sm" className="gap-2">
+                      <Plus size={16} /> Push Broadcast
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="max-w-md">
                     <DialogHeader>
                       <DialogTitle>Operational Broadcast</DialogTitle>
+                      <DialogDescription>Send a message to all participants in this sector.</DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleAddNews} className="space-y-8 py-6">
+                    <form onSubmit={handleAddNews} className="space-y-6 pt-4">
                       <Input
                         placeholder="Headline"
-                        className="h-16 italic font-black uppercase"
+                        className="font-semibold"
                         value={newsTitle}
                         onChange={(e) => setNewsTitle(e.target.value)}
                         required
                       />
                       <textarea
-                        className="w-full min-h-[200px] p-6 border-2 border-foreground font-bold uppercase tracking-tight outline-none"
-                        placeholder="Transmission Data..."
+                        className="w-full min-h-[150px] p-4 rounded-lg border bg-background text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20"
+                        placeholder="Transmission Details..."
                         value={newsContent}
                         onChange={(e) => setNewsContent(e.target.value)}
                         required
                       />
-                      <Button
-                        type="submit"
-                        className="w-full h-20 text-xl italic"
-                      >
-                        Initiate Broadcast
-                      </Button>
+                      <DialogFooter>
+                        <Button type="submit" className="w-full">Initiate Broadcast</Button>
+                      </DialogFooter>
                     </form>
                   </DialogContent>
                 </Dialog>
               )}
             </header>
 
-            <div className="space-y-24">
+            <div className="space-y-8">
               {tournament.news
                 ?.sort((a, b) => b.id - a.id)
                 .map((n) => (
-                  <div
-                    key={n.id}
-                    className="border-l-8 border-foreground pl-12 space-y-6"
-                  >
-                    <div className="flex justify-between items-baseline">
-                      <h3 className="text-4xl font-black tracking-tighter uppercase italic leading-none">
-                        {n.title}
-                      </h3>
-                      {isOwner && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteNews(n.id)}
-                        >
-                          <Trash2 size={16} />
-                        </Button>
-                      )}
+                  <div key={n.id} className="relative pl-8 border-l-2 border-primary/20 space-y-2">
+                    <div className="absolute -left-1.5 top-0 w-3 h-3 rounded-full bg-primary border-4 border-background" />
+                    <div className="flex justify-between items-start">
+                      <h3 className="text-lg font-bold tracking-tight">{n.title}</h3>
+                      <div className="flex items-center gap-3">
+                         <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
+                           {new Date(n.created_at).toLocaleDateString()}
+                         </span>
+                         {isOwner && (
+                           <Button
+                             variant="ghost"
+                             size="icon"
+                             className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                             onClick={() => handleDeleteNews(n.id)}
+                           >
+                             <Trash2 size={14} />
+                           </Button>
+                         )}
+                      </div>
                     </div>
-                    <p className="text-xl font-bold uppercase leading-tight opacity-70">
+                    <p className="text-sm text-muted-foreground leading-relaxed">
                       {n.content}
-                    </p>
-                    <p className="text-[10px] font-black opacity-20 uppercase tracking-[0.5em]">
-                      {new Date(n.created_at).toLocaleDateString()}
                     </p>
                   </div>
                 ))}
+              {tournament.news?.length === 0 && (
+                <div className="py-12 text-center text-muted-foreground/40 italic text-sm">No transmissions detected in this sector.</div>
+              )}
             </div>
           </div>
         )}
 
         {activeTab === "info" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-24 max-w-6xl mx-auto">
-            <section className="space-y-12">
-              <div className="flex justify-between items-end border-b-8 border-foreground pb-6">
-                <h2 className="text-5xl font-black italic uppercase tracking-tighter leading-none">
-                  Prizes
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-6xl mx-auto">
+            <section className="space-y-6">
+              <div className="flex items-center justify-between border-b pb-4">
+                <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
+                   <Award size={20} className="text-primary" /> Prizes
                 </h2>
                 {isOwner && (
-                  <Button
-                    variant="outline"
-                    className="border-2 font-black italic"
-                    onClick={() => setPrizeModalOpen(true)}
-                  >
-                    ADD_PRIZE
+                  <Button variant="ghost" size="sm" onClick={() => setPrizeModalOpen(true)} className="h-8 text-xs font-semibold">
+                    Add Prize
                   </Button>
                 )}
               </div>
-              <div className="grid gap-1 bg-foreground border-2 border-foreground">
+              <div className="space-y-3">
                 {tournament.prizes_list?.map((p) => (
-                  <div
-                    key={p.id}
-                    className="bg-background p-10 flex justify-between items-center group"
-                  >
-                    <span className="text-[10px] font-black opacity-40 uppercase tracking-[0.3em]">
-                      {p.rank}
-                    </span>
-                    <span className="text-4xl font-black italic tracking-tighter">
-                      {p.value}
-                    </span>
-                    {isOwner && (
-                      <Button
-                        variant="ghost"
-                        className="opacity-0 group-hover:opacity-100"
-                        onClick={() => handleDeletePrize(p.id)}
-                      >
-                        <Trash2 size={16} />
-                      </Button>
-                    )}
-                  </div>
+                  <Card key={p.id} className="p-4 group hover:border-primary/30 transition-colors">
+                    <div className="flex justify-between items-center">
+                      <div className="space-y-0.5">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{p.rank}</p>
+                        <p className="text-xl font-bold tracking-tight">{p.value}</p>
+                      </div>
+                      {isOwner && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                          onClick={() => handleDeletePrize(p.id)}
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      )}
+                    </div>
+                  </Card>
                 ))}
+                {tournament.prizes_list?.length === 0 && (
+                   <p className="text-sm text-muted-foreground/50 italic py-4">No prize pool specified.</p>
+                )}
               </div>
             </section>
 
-            <section className="space-y-12">
-              <div className="flex justify-between items-end border-b-8 border-foreground pb-6">
-                <h2 className="text-5xl font-black italic uppercase tracking-tighter leading-none">
-                  Rules
+            <section className="space-y-6">
+              <div className="flex items-center justify-between border-b pb-4">
+                <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
+                   <ScrollText size={20} className="text-primary" /> Rules
                 </h2>
                 {isOwner && (
-                  <Button
-                    variant="outline"
-                    className="border-2 font-black italic"
-                    onClick={() => setRuleModalOpen(true)}
-                  >
-                    ADD_RULE
+                  <Button variant="ghost" size="sm" onClick={() => setRuleModalOpen(true)} className="h-8 text-xs font-semibold">
+                    Add Rule
                   </Button>
                 )}
               </div>
-              <div className="space-y-12">
+              <div className="space-y-4">
                 {tournament.rules_list?.map((r, i) => (
-                  <div key={r.id} className="flex gap-8 group">
-                    <span className="text-4xl font-black italic opacity-10">
-                      0{i + 1}
-                    </span>
-                    <p className="text-2xl font-black italic uppercase tracking-tighter leading-none flex-1">
-                      {r.content}
-                    </p>
+                  <div key={r.id} className="flex gap-4 group p-4 rounded-xl bg-muted/30">
+                    <span className="text-xl font-bold text-primary/20">0{i + 1}</span>
+                    <p className="text-sm font-medium leading-relaxed flex-1 pt-1">{r.content}</p>
                     {isOwner && (
                       <Button
                         variant="ghost"
-                        className="opacity-0 group-hover:opacity-100"
+                        size="icon"
+                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all shrink-0"
                         onClick={() => handleDeleteRule(r.id)}
                       >
                         <Trash2 size={16} />
@@ -956,48 +928,102 @@ const TournamentDetailsPage = () => {
                     )}
                   </div>
                 ))}
+                {tournament.rules_list?.length === 0 && (
+                   <p className="text-sm text-muted-foreground/50 italic py-4">No specific rules defined.</p>
+                )}
               </div>
             </section>
           </div>
         )}
 
         {activeTab === "live" && (
-          <div className="max-w-5xl mx-auto space-y-12">
+          <div className="max-w-4xl mx-auto space-y-8">
             {isOwner && (
-              <div className="flex gap-1 border-2 border-foreground bg-foreground">
-                <Input
-                  placeholder="Satellite Feed URL"
-                  className="flex-1 h-20 border-none text-xl italic font-black uppercase placeholder:opacity-10"
-                  value={streamUrl}
-                  onChange={(e) => setStreamUrl(e.target.value)}
-                />
-                <Button
-                  onClick={handleUpdateStream}
-                  className="h-20 px-12 border-l-2 border-foreground"
-                >
-                  Link Signal
-                </Button>
-              </div>
+              <Card className="p-6">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1 space-y-2">
+                     <Label className="text-xs uppercase tracking-wider font-semibold opacity-60">Satellite Feed URL</Label>
+                     <Input
+                        placeholder="YouTube/Twitch Stream Link"
+                        className="shadow-none border-muted"
+                        value={streamUrl}
+                        onChange={(e) => setStreamUrl(e.target.value)}
+                     />
+                  </div>
+                  <Button
+                    onClick={handleUpdateStream}
+                    className="sm:mt-6 font-semibold"
+                  >
+                    Link Signal
+                  </Button>
+                </div>
+              </Card>
             )}
-            {tournament.stream_link ? (
-              <div className="aspect-video bg-foreground border-8 border-foreground grayscale hover:grayscale-0 transition-all duration-700">
+            <Card className="overflow-hidden border-none shadow-2xl bg-black aspect-video relative group">
+              {tournament.stream_link ? (
                 <iframe
                   className="w-full h-full"
                   src={tournament.stream_link.replace("watch?v=", "embed/")}
                   frameBorder="0"
                   allowFullScreen
                 ></iframe>
-              </div>
-            ) : (
-              <div className="aspect-video border-4 border-foreground border-dashed flex items-center justify-center">
-                <p className="text-5xl font-black opacity-10 uppercase italic tracking-tighter">
-                  Signal Lost
-                </p>
-              </div>
-            )}
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4">
+                  <div className="w-16 h-16 rounded-full border-2 border-white/20 flex items-center justify-center animate-pulse">
+                     <Tv size={32} className="text-white/20" />
+                  </div>
+                  <p className="text-sm font-semibold text-white/20 uppercase tracking-[0.3em]">Signal Lost</p>
+                </div>
+              )}
+            </Card>
           </div>
         )}
       </div>
+      
+      {/* Dialogs for Info section */}
+      <Dialog open={prizeModalOpen} onOpenChange={setPrizeModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Prize</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddPrize} className="space-y-6 pt-4">
+            <div className="space-y-2">
+              <Label>Rank / Position</Label>
+              <Input placeholder="e.g. 1st Place" value={prizeRank} onChange={(e) => setPrizeRank(e.target.value)} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Value</Label>
+              <Input placeholder="e.g. $1,000" value={prizeValue} onChange={(e) => setPrizeValue(e.target.value)} required />
+            </div>
+            <DialogFooter>
+              <Button type="submit" className="w-full">Save Prize</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={ruleModalOpen} onOpenChange={setRuleModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Rule</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddRule} className="space-y-6 pt-4">
+            <div className="space-y-2">
+              <Label>Rule Description</Label>
+              <textarea
+                className="w-full min-h-[100px] p-3 rounded-lg border bg-background text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20"
+                placeholder="e.g. No substitutions after 80th minute"
+                value={ruleContent}
+                onChange={(e) => setRuleContent(e.target.value)}
+                required
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit" className="w-full">Save Rule</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

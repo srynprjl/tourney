@@ -115,88 +115,72 @@ const TournamentsPage = () => {
 
   if (loading)
     return (
-      <div className="p-24 text-center font-black uppercase tracking-[0.5em] animate-pulse">
-        Connecting to Arena Network Clusters...
+      <div className="min-h-[400px] flex items-center justify-center font-bold tracking-tighter text-2xl animate-pulse uppercase">
+        Connecting to Arena Network...
       </div>
     );
 
   return (
-    <div className="max-w-6xl mx-auto py-12 px-4 space-y-24">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-12 border-l-8 border-foreground pl-12 py-4">
+    <div className="space-y-12 pb-20">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 pb-10 border-b">
         <div className="space-y-4">
-          <Badge variant="outline">Sector: Arena Command</Badge>
-          <h1 className="text-7xl font-black tracking-tighter italic uppercase leading-none">
-            Arena Hub
-          </h1>
-          <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-50 italic">
-            Global Competition Deployment & Orchestration
-          </p>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-primary" />
+            <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Arenas Overview</span>
+          </div>
+          <h1 className="text-6xl font-bold tracking-tighter uppercase leading-none">Arenas</h1>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex flex-wrap gap-4">
           <Dialog open={joinOpen} onOpenChange={setJoinOpen}>
             <DialogTrigger asChild>
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-20 px-10 border-2 gap-4 font-black"
-              >
-                <KeyRound size={24} strokeWidth={2.5} /> JOIN CODE
+              <Button variant="outline" className="px-8 font-black uppercase tracking-widest text-[10px] h-12">
+                Join Arena
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Secure Access</DialogTitle>
-                <DialogDescription>
-                  Input authorized vector code for entry
+            <DialogContent className="max-w-md border-0 rounded-none p-10">
+              <DialogHeader className="space-y-6">
+                <DialogTitle className="text-3xl font-bold uppercase tracking-tighter">Join Arena</DialogTitle>
+                <DialogDescription className="text-[10px] font-bold uppercase tracking-widest opacity-60">
+                  Enter the invite code for the private arena.
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleJoinByCode} className="space-y-12 py-8">
+              <form onSubmit={handleJoinByCode} className="space-y-10 pt-8">
                 <div className="space-y-4">
-                  <Label>Arena Vector Code</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Invite Code</Label>
                   <Input
                     placeholder="X9F2B3"
-                    className="h-20 text-4xl text-center tracking-[0.3em]"
+                    className="h-16 text-center text-3xl font-bold tracking-[0.3em] border-x-0 border-t-0 border-b rounded-none focus-visible:ring-0 focus-visible:border-primary transition-colors uppercase"
                     value={joinCode}
                     onChange={(e) => setJoinCode(e.target.value)}
                     required
                   />
                 </div>
-                <DialogFooter>
-                  <Button
-                    type="submit"
-                    className="w-full h-20 text-xl italic uppercase"
-                  >
-                    Verify & Link
-                  </Button>
-                </DialogFooter>
+                <Button type="submit" className="w-full font-black uppercase tracking-widest text-[10px] h-14">Join Now</Button>
               </form>
             </DialogContent>
           </Dialog>
 
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button
-                size="lg"
-                className="h-20 px-10 gap-4 font-black uppercase italic italic"
-              >
-                <Plus size={24} strokeWidth={3} /> INITIALIZE ARENA
+              <Button className="px-8 font-black uppercase tracking-widest text-[10px] h-12">
+                Create Arena
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl">
-              <DialogHeader className="bg-foreground text-background -m-12 p-12 mb-12">
-                <DialogTitle className="text-5xl">Configure Arena</DialogTitle>
-                <DialogDescription className="text-background/60 font-black uppercase tracking-widest mt-2">
-                  Specify operational parameters
+            <DialogContent className="max-w-2xl border-0 rounded-none p-10">
+              <DialogHeader className="space-y-6">
+                <DialogTitle className="text-3xl font-bold uppercase tracking-tighter">New Arena</DialogTitle>
+                <DialogDescription className="text-[10px] font-bold uppercase tracking-widest opacity-60">
+                  Configure the settings for your new tournament.
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleCreate} className="space-y-12">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                  <div className="space-y-4 col-span-full">
-                    <Label>Arena Designation</Label>
+              <form onSubmit={handleCreate} className="space-y-8 pt-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-3 col-span-full">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Arena Name</Label>
                     <Input
-                      placeholder="E.G. GLOBAL_CHAMPIONSHIP_2026"
-                      className="h-16 text-2xl italic"
+                      placeholder="E.G. GLOBAL CHAMPIONSHIP 2026"
+                      className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs uppercase"
                       value={formData.name}
                       onChange={(e) =>
                         setFormData({ ...formData, name: e.target.value })
@@ -205,52 +189,48 @@ const TournamentsPage = () => {
                     />
                   </div>
 
-                  <div className="space-y-4">
-                    <Label>Operational Discipline</Label>
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Sport</Label>
                     <Select
                       value={formData.sport}
                       onValueChange={(v) =>
                         setFormData({ ...formData, sport: v })
                       }
                     >
-                      <SelectTrigger className="h-16">
+                      <SelectTrigger className="rounded-none border-x-0 border-t-0 border-b shadow-none font-bold uppercase tracking-widest text-[10px] h-12">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="football">Football</SelectItem>
-                        <SelectItem value="cricket">Cricket</SelectItem>
-                        <SelectItem value="basketball">Basketball</SelectItem>
+                      <SelectContent className="rounded-none border shadow-none">
+                        <SelectItem value="football" className="text-[10px] font-bold uppercase tracking-widest">Football</SelectItem>
+                        <SelectItem value="cricket" className="text-[10px] font-bold uppercase tracking-widest">Cricket</SelectItem>
+                        <SelectItem value="basketball" className="text-[10px] font-bold uppercase tracking-widest">Basketball</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  <div className="space-y-4">
-                    <Label>Engine Type</Label>
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Format</Label>
                     <Select
                       value={formData.type}
                       onValueChange={(v) =>
                         setFormData({ ...formData, type: v })
                       }
                     >
-                      <SelectTrigger className="h-16">
+                      <SelectTrigger className="rounded-none border-x-0 border-t-0 border-b shadow-none font-bold uppercase tracking-widest text-[10px] h-12">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="knockout">
-                          Knockout (Direct)
-                        </SelectItem>
-                        <SelectItem value="group">
-                          Group Phase (Hybrid)
-                        </SelectItem>
+                      <SelectContent className="rounded-none border shadow-none">
+                        <SelectItem value="knockout" className="text-[10px] font-bold uppercase tracking-widest">Knockout</SelectItem>
+                        <SelectItem value="group" className="text-[10px] font-bold uppercase tracking-widest">Group Stage</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  <div className="space-y-4">
-                    <Label>Unit Capacity</Label>
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Max Teams</Label>
                     <Input
                       type="number"
-                      className="h-16 text-xl"
+                      className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs"
                       value={formData.max_teams}
                       onChange={(e) =>
                         setFormData({ ...formData, max_teams: e.target.value })
@@ -258,12 +238,12 @@ const TournamentsPage = () => {
                     />
                   </div>
 
-                  <div className="space-y-4">
-                    <Label>Entry Fee (USD)</Label>
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Entry Fee (USD)</Label>
                     <Input
                       type="number"
                       step="0.01"
-                      className="h-16 text-xl"
+                      className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs"
                       value={formData.entry_fee}
                       onChange={(e) =>
                         setFormData({ ...formData, entry_fee: e.target.value })
@@ -271,12 +251,10 @@ const TournamentsPage = () => {
                     />
                   </div>
 
-                  <div className="flex items-center justify-between p-8 bg-secondary border-2 border-foreground col-span-full">
-                    <div className="space-y-2">
-                      <Label>Public Deployment</Label>
-                      <p className="text-[10px] opacity-60 font-black uppercase tracking-widest">
-                        Visible to all active operators
-                      </p>
+                  <div className="flex items-center justify-between py-6 border-b col-span-full">
+                    <div className="space-y-1">
+                      <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Public Visibility</Label>
+                      <p className="text-[8px] font-bold uppercase tracking-widest opacity-60">Visible to all users.</p>
                     </div>
                     <Switch
                       checked={formData.is_public}
@@ -287,136 +265,87 @@ const TournamentsPage = () => {
                   </div>
                 </div>
 
-                <DialogFooter>
-                  <Button
-                    type="submit"
-                    className="w-full h-24 text-2xl uppercase italic tracking-tighter"
-                  >
-                    Initiate Deployment Protocol
-                  </Button>
-                </DialogFooter>
+                <Button type="submit" className="w-full font-black uppercase tracking-widest text-[10px] h-14">Create Arena</Button>
               </form>
             </DialogContent>
           </Dialog>
         </div>
       </header>
 
-      <div className="flex flex-col md:flex-row gap-1 border-2 border-foreground bg-foreground">
-        <div className="flex flex-1 gap-1 bg-foreground">
-          <button
-            className={cn(
-              "flex-1 p-8 text-[10px] font-black uppercase tracking-[0.4em] transition-colors",
-              activeTab === "all"
-                ? "bg-background text-foreground"
-                : "bg-foreground text-background hover:bg-muted/10",
-            )}
-            onClick={() => setActiveTab("all")}
-          >
-            Global Network
-          </button>
-          <button
-            className={cn(
-              "flex-1 p-8 text-[10px] font-black uppercase tracking-[0.4em] transition-colors",
-              activeTab === "mine"
-                ? "bg-background text-foreground"
-                : "bg-foreground text-background hover:bg-muted/10",
-            )}
-            onClick={() => setActiveTab("mine")}
-          >
-            My Sectors
-          </button>
-        </div>
+      <div className="flex flex-col md:flex-row gap-8 items-end">
+         <div className="flex border-b w-full md:w-auto">
+            <button
+              className={cn(
+                "px-8 py-4 text-[10px] font-black uppercase tracking-[0.3em] transition-all",
+                activeTab === "all" ? "border-b-2 border-primary" : "opacity-30 hover:opacity-100"
+              )}
+              onClick={() => setActiveTab("all")}
+            >
+              Public
+            </button>
+            <button
+              className={cn(
+                "px-8 py-4 text-[10px] font-black uppercase tracking-[0.3em] transition-all",
+                activeTab === "mine" ? "border-b-2 border-primary" : "opacity-30 hover:opacity-100"
+              )}
+              onClick={() => setActiveTab("mine")}
+            >
+              My Arenas
+            </button>
+         </div>
 
-        <div className="relative flex-[1.5] bg-background">
-          <Search
-            className="absolute left-8 top-1/2 -translate-y-1/2 opacity-20"
-            size={24}
-          />
-          <Input
-            placeholder="Search Signal Data..."
-            className="pl-20 h-24 border-none text-2xl italic tracking-tighter placeholder:opacity-10"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+         <div className="relative flex-1 w-full">
+            <Search className="absolute left-0 top-1/2 -translate-y-1/2 text-muted-foreground opacity-40" size={16} />
+            <Input
+              placeholder="SEARCH BY NAME..."
+              className="pl-8 h-12 border-x-0 border-t-0 border-b rounded-none focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-[0.2em] text-[10px]"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1 bg-foreground border-2 border-foreground">
-        {filtered.map((t) => (
-          <Card
-            key={t.id}
-            className="border-none p-12 group hover:bg-muted transition-colors rounded-none"
-          >
-            <div className="flex flex-col h-full space-y-12">
-              <div className="flex justify-between items-start">
-                <Badge variant="outline">{t.sport}</Badge>
-                <div className="flex gap-4 opacity-20 group-hover:opacity-100 transition-opacity">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-0 border-t border-l">
+        {filtered.map((t, i) => (
+          <div key={t.id} className="p-10 border-r border-b hover:bg-accent/30 transition-colors group flex flex-col h-full">
+            <div className="flex justify-between items-start mb-12">
+               <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20">Arena {String(i + 1).padStart(2, '0')}</span>
+               <div className="flex gap-4">
                   {t.creator_id === user?.user_id && (
-                    <Badge className="bg-foreground text-background border-none">
-                      Owner
-                    </Badge>
+                    <span className="text-[8px] font-black uppercase tracking-[0.2em] border px-2 py-1">Owner</span>
                   )}
-                  {t.is_public ? <Globe size={20} /> : <Lock size={20} />}
-                </div>
-              </div>
-
-              <div className="space-y-4 flex-1">
-                <h2 className="text-4xl font-black tracking-tighter uppercase italic leading-[0.9]">
-                  {t.name}
-                </h2>
-                <p className="text-[9px] font-black uppercase tracking-[0.3em] opacity-30 italic">
-                  Sector-ID: {String(t.id || "").split("-")[0]}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-1 bg-foreground border-2 border-foreground mt-8">
-                <div className="bg-background p-6 space-y-1">
-                  <p className="text-[9px] font-black opacity-40 uppercase tracking-widest flex items-center gap-2">
-                    <Users size={12} /> Capacity
-                  </p>
-                  <p className="text-2xl font-black italic uppercase">
-                    {t.max_teams}
-                  </p>
-                </div>
-                <div className="bg-background p-6 space-y-1">
-                  <p className="text-[9px] font-black opacity-40 uppercase tracking-widest flex items-center gap-2">
-                    <Activity size={12} /> Protocol
-                  </p>
-                  <p className="text-2xl font-black italic uppercase">
-                    {t.type}
-                  </p>
-                </div>
-              </div>
-
-              <Button
-                asChild
-                className="w-full h-20 text-lg uppercase italic tracking-tighter border-2 border-foreground"
-              >
-                <Link
-                  to={`/tournament/${t.id}`}
-                  className="flex items-center justify-between px-8"
-                >
-                  Access Link <ChevronRight size={24} strokeWidth={3} />
-                </Link>
-              </Button>
+                  <div className="opacity-40">
+                    {t.is_public ? <Globe size={14} /> : <Lock size={14} />}
+                  </div>
+               </div>
             </div>
-          </Card>
+
+            <div className="space-y-4 mb-16 flex-1">
+               <span className="text-[8px] font-black uppercase tracking-[0.3em] opacity-60">{t.sport} // {t.type}</span>
+               <h3 className="text-3xl font-bold uppercase tracking-tighter leading-none">{t.name}</h3>
+            </div>
+
+            <div className="grid grid-cols-2 gap-8 mb-12">
+               <div className="space-y-1">
+                  <p className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.3em]">Max Teams</p>
+                  <p className="text-xl font-bold uppercase tracking-tighter">{t.max_teams} Teams</p>
+               </div>
+               <div className="space-y-1">
+                  <p className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.3em]">Entry Fee</p>
+                  <p className="text-xl font-bold uppercase tracking-tighter">${t.entry_fee}</p>
+               </div>
+            </div>
+
+            <Button asChild variant="outline" className="w-full font-black uppercase tracking-widest text-[10px] h-12">
+              <Link to={`/tournament/${t.id}`}>Enter Arena</Link>
+            </Button>
+          </div>
         ))}
       </div>
 
       {filtered.length === 0 && (
-        <div className="py-48 text-center border-4 border-foreground border-dashed">
-          <div className="space-y-8 max-w-md mx-auto">
-            <Trophy size={80} strokeWidth={1} className="mx-auto opacity-10" />
-            <div className="space-y-2">
-              <p className="text-4xl font-black uppercase tracking-tighter italic opacity-30">
-                Zero Signals
-              </p>
-              <p className="text-[10px] font-black uppercase tracking-[0.5em] opacity-20 italic">
-                Initialize a new arena sector to begin operations
-              </p>
-            </div>
-          </div>
+        <div className="py-32 text-center border-t border-b">
+          <h3 className="text-xs font-black uppercase tracking-[0.5em] opacity-30">No arenas found</h3>
         </div>
       )}
     </div>

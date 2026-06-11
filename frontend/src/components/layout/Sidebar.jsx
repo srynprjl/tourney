@@ -27,66 +27,65 @@ const Sidebar = () => {
   };
 
   const navItems = [
-    { name: "01. Dashboard", path: "/dashboard", icon: LayoutDashboard },
-    { name: "02. Arenas", path: "/tournaments", icon: Trophy },
-    { name: "03. Squads", path: "/teams", icon: Users },
+    { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+    { name: "Arenas", path: "/tournaments", icon: Trophy },
+    { name: "Squads", path: "/teams", icon: Users },
   ];
 
   if (user) {
-    navItems.push({ name: "04. Identity", path: `/player/${user.username}`, icon: Award });
+    navItems.push({ name: "Profile", path: `/player/${user.username}`, icon: Award });
   }
 
   if (user?.is_admin) {
-    navItems.push({ name: "05. Command", path: "/admin", icon: ShieldCheck });
+    navItems.push({ name: "Admin", path: "/admin", icon: ShieldCheck });
   }
 
   return (
     <aside
-      className="bg-background border-r-2 border-foreground w-64 flex flex-col fixed h-full z-50 font-sans"
+      className="bg-background border-r w-64 flex flex-col fixed h-full z-50"
     >
-      <div className="p-8 flex items-center justify-between border-b-2 border-foreground">
-        <Link to="/dashboard" className="flex items-center gap-3">
-          <Trophy className="w-6 h-6" strokeWidth={3} />
-          <span className="font-black text-xl uppercase tracking-tighter italic">TourneyPro</span>
+      <div className="p-8 flex items-center justify-between">
+        <Link to="/dashboard" className="flex items-center gap-2">
+          <Trophy className="w-5 h-5" strokeWidth={2.5} />
+          <span className="font-bold text-lg tracking-tighter uppercase">TourneyPro</span>
         </Link>
       </div>
 
-      <nav className="flex-1 p-6 space-y-1">
+      <nav className="flex-1 px-4 space-y-0.5">
         {navItems.map((item) => (
           <Link
             key={item.path}
             to={item.path}
             className={cn(
-              "flex items-center p-4 transition-all text-[10px] font-black uppercase tracking-widest",
+              "flex items-center px-4 py-2.5 transition-all text-xs font-semibold uppercase tracking-widest",
               location.pathname === item.path
-                ? "bg-foreground text-background"
-                : "text-foreground hover:bg-muted",
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <item.icon size={16} className="mr-4" strokeWidth={2.5} />
             <span>{item.name}</span>
           </Link>
         ))}
       </nav>
 
-      <div className="p-6 border-t-2 border-foreground space-y-1">
+      <div className="p-4 space-y-0.5">
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start gap-4 text-[10px] font-black uppercase tracking-widest h-12"
+          className="w-full justify-start gap-3 font-semibold text-xs uppercase tracking-widest h-10 px-4"
           onClick={() => setDarkMode(!darkMode)}
         >
-          {darkMode ? <Sun size={16} /> : <Moon size={16} />}
-          <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
+          {darkMode ? <Sun size={14} /> : <Moon size={14} />}
+          <span>{darkMode ? "Light" : "Dark"}</span>
         </Button>
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start gap-4 text-[10px] font-black uppercase tracking-widest h-12 text-foreground hover:bg-foreground hover:text-background"
+          className="w-full justify-start gap-3 font-semibold text-xs uppercase tracking-widest h-10 px-4 text-muted-foreground hover:text-foreground"
           onClick={handleLogout}
         >
-          <LogOut size={16} />
-          <span>Exit System</span>
+          <LogOut size={14} />
+          <span>Exit</span>
         </Button>
       </div>
     </aside>
