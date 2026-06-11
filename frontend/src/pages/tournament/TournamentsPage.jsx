@@ -1,63 +1,72 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import api from '@/services/api';
-import { useAuth } from '@/context/AuthContext';
-import { 
-  Plus, Trophy, Users, Calendar, Activity, 
-  ChevronRight, Search, Filter, LayoutGrid, List,
-  ShieldCheck, Globe, Lock, Gamepad2, Settings2,
-  KeyRound
-} from 'lucide-react';
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import api from "@/services/api";
+import { useAuth } from "@/context/AuthContext";
+import {
+  Plus,
+  Trophy,
+  Users,
+  Activity,
+  ChevronRight,
+  Search,
+  Globe,
+  Lock,
+  KeyRound,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // UI Components
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Dialog, DialogContent, DialogHeader, DialogTitle, 
-  DialogTrigger, DialogDescription, DialogFooter 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 
 const TournamentsPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [tournaments, setTournaments] = useState([]);
-  const [search, setSearch] = useState('');
-  const [view, setView] = useState('grid');
-  const [activeTab, setActiveTab] = useState('all'); // 'all' or 'mine'
+  const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState("all"); // 'all' or 'mine'
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
 
-  // Form State
   const [formData, setFormData] = useState({
-    name: '',
-    type: 'knockout',
-    sport: 'football',
-    mode: 'self',
+    name: "",
+    type: "knockout",
+    sport: "football",
+    mode: "self",
     max_teams: 8,
     is_public: true,
     is_double: false,
     group_count: 2,
     teams_per_group: 4,
     promote_count: 2,
-    entry_fee: 0
+    entry_fee: 0,
   });
-
-  useEffect(() => {
-    fetchTournaments();
-  }, []);
 
   const fetchTournaments = async () => {
     try {
-      const res = await api.get('/tournaments');
+      const res = await api.get("/tournaments");
       setTournaments(res.data || []);
     } catch (err) {
       console.error(err);
@@ -66,21 +75,25 @@ const TournamentsPage = () => {
     }
   };
 
+  useEffect(() => {
+    fetchTournaments();
+  }, []);
+
   const handleCreate = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/tournaments', {
+      await api.post("/tournaments", {
         ...formData,
         max_teams: parseInt(formData.max_teams),
         group_count: parseInt(formData.group_count),
         teams_per_group: parseInt(formData.teams_per_group),
         promote_count: parseInt(formData.promote_count),
-        entry_fee: parseFloat(formData.entry_fee)
+        entry_fee: parseFloat(formData.entry_fee),
       });
       setOpen(false);
       fetchTournaments();
     } catch (err) {
-      alert('Failed to create tournament');
+      alert("Failed to create tournament");
     }
   };
 
@@ -95,207 +108,316 @@ const TournamentsPage = () => {
   };
 
   const filtered = tournaments
-    .filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
-    .filter(t => activeTab === 'all' ? true : t.creator_id === user?.user_id);
+    .filter((t) => t.name.toLowerCase().includes(search.toLowerCase()))
+    .filter((t) =>
+      activeTab === "all" ? true : t.creator_id === user?.user_id,
+    );
 
-  if (loading) return <div className="p-12 text-center animate-pulse font-black text-muted-foreground uppercase tracking-widest">CONNECTING TO ARENA NETWORK...</div>;
+  if (loading)
+    return (
+      <div className="p-24 text-center font-black uppercase tracking-[0.5em] animate-pulse">
+        Connecting to Arena Network Clusters...
+      </div>
+    );
 
   return (
-    <div className="max-w-7xl mx-auto space-y-12 pb-24">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 px-4">
-        <div className="space-y-2">
-          <h1 className="text-6xl font-black tracking-tighter italic uppercase">Arena Center</h1>
-          <p className="text-primary font-black uppercase text-xs tracking-[0.4em]">Global Competition Deployment Hub</p>
+    <div className="max-w-6xl mx-auto py-12 px-4 space-y-24">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-12 border-l-8 border-foreground pl-12 py-4">
+        <div className="space-y-4">
+          <Badge variant="outline">Sector: Arena Command</Badge>
+          <h1 className="text-7xl font-black tracking-tighter italic uppercase leading-none">
+            Arena Hub
+          </h1>
+          <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-50 italic">
+            Global Competition Deployment & Orchestration
+          </p>
         </div>
 
-        <div className="flex gap-4">
+        <div className="flex flex-col sm:flex-row gap-4">
           <Dialog open={joinOpen} onOpenChange={setJoinOpen}>
             <DialogTrigger asChild>
-              <Button size="lg" variant="outline" className="h-16 px-10 rounded-2xl font-black border-primary/20 gap-3 shadow-xl">
-                <KeyRound size={18} /> JOIN BY CODE
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-20 px-10 border-2 gap-4 font-black"
+              >
+                <KeyRound size={24} strokeWidth={2.5} /> JOIN CODE
               </Button>
             </DialogTrigger>
-            <DialogContent className="rounded-[3rem] border-none shadow-2xl p-0 overflow-hidden max-w-md">
-               <DialogHeader className="bg-muted p-12">
-                  <DialogTitle className="text-3xl font-black uppercase italic tracking-tighter text-foreground">Secure Entry</DialogTitle>
-                  <DialogDescription className="font-bold uppercase text-[10px] tracking-widest mt-2 text-muted-foreground/60">Enter the authorized arena join code</DialogDescription>
-               </DialogHeader>
-               <form onSubmit={handleJoinByCode} className="p-12 space-y-8">
-                  <div className="space-y-2">
-                     <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Arena Vector Code</Label>
-                     <Input placeholder="E.g. X9F2B3" className="h-16 rounded-2xl font-black text-2xl tracking-[0.5em] text-center uppercase" value={joinCode} onChange={e => setJoinCode(e.target.value)} required />
-                  </div>
-                  <DialogFooter>
-                     <Button type="submit" className="w-full h-16 rounded-2xl font-black text-lg">VERIFY & ACCESS</Button>
-                  </DialogFooter>
-               </form>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Secure Access</DialogTitle>
+                <DialogDescription>
+                  Input authorized vector code for entry
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleJoinByCode} className="space-y-12 py-8">
+                <div className="space-y-4">
+                  <Label>Arena Vector Code</Label>
+                  <Input
+                    placeholder="X9F2B3"
+                    className="h-20 text-4xl text-center tracking-[0.3em]"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value)}
+                    required
+                  />
+                </div>
+                <DialogFooter>
+                  <Button
+                    type="submit"
+                    className="w-full h-20 text-xl italic uppercase"
+                  >
+                    Verify & Link
+                  </Button>
+                </DialogFooter>
+              </form>
             </DialogContent>
           </Dialog>
 
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button size="lg" className="h-16 px-10 rounded-2xl font-black shadow-2xl shadow-primary/20 gap-3 group">
-                <Plus className="group-hover:rotate-90 transition-transform duration-300" /> 
-                INITIALIZE ARENA
+              <Button
+                size="lg"
+                className="h-20 px-10 gap-4 font-black uppercase italic italic"
+              >
+                <Plus size={24} strokeWidth={3} /> INITIALIZE ARENA
               </Button>
             </DialogTrigger>
-          <DialogContent className="max-w-3xl rounded-[3rem] p-0 border-none shadow-2xl overflow-hidden">
-            <DialogHeader className="bg-primary p-12 text-primary-foreground">
-               <DialogTitle className="text-4xl font-black uppercase italic tracking-tighter">Arena Configuration</DialogTitle>
-               <DialogDescription className="text-primary-foreground/70 font-bold uppercase text-[10px] tracking-[0.2em] mt-2">Specify operational parameters for deployment</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreate} className="p-12 space-y-10 max-h-[70vh] overflow-y-auto bg-card">
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                  <div className="space-y-2 col-span-full">
-                    <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Arena Designation</Label>
-                    <Input placeholder="E.g. WORLD CUP PRO 2026" className="h-14 rounded-2xl font-black text-xl uppercase italic shadow-inner" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
+            <DialogContent className="max-w-4xl">
+              <DialogHeader className="bg-foreground text-background -m-12 p-12 mb-12">
+                <DialogTitle className="text-5xl">Configure Arena</DialogTitle>
+                <DialogDescription className="text-background/60 font-black uppercase tracking-widest mt-2">
+                  Specify operational parameters
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleCreate} className="space-y-12">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                  <div className="space-y-4 col-span-full">
+                    <Label>Arena Designation</Label>
+                    <Input
+                      placeholder="E.G. GLOBAL_CHAMPIONSHIP_2026"
+                      className="h-16 text-2xl italic"
+                      value={formData.name}
+                      onChange={(e) =>
+                        setFormData({ ...formData, name: e.target.value })
+                      }
+                      required
+                    />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Operational Discipline</Label>
-                    <Select value={formData.sport} onValueChange={v => setFormData({...formData, sport: v})}>
-                       <SelectTrigger className="h-14 rounded-2xl font-black uppercase tracking-tight text-md"><SelectValue /></SelectTrigger>
-                       <SelectContent className="rounded-2xl border-none shadow-2xl">
-                          <SelectItem value="football" className="font-bold uppercase py-3">Football</SelectItem>
-                          <SelectItem value="cricket" className="font-bold uppercase py-3">Cricket</SelectItem>
-                          <SelectItem value="basketball" className="font-bold uppercase py-3">Basketball</SelectItem>
-                       </SelectContent>
+                  <div className="space-y-4">
+                    <Label>Operational Discipline</Label>
+                    <Select
+                      value={formData.sport}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, sport: v })
+                      }
+                    >
+                      <SelectTrigger className="h-16">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="football">Football</SelectItem>
+                        <SelectItem value="cricket">Cricket</SelectItem>
+                        <SelectItem value="basketball">Basketball</SelectItem>
+                      </SelectContent>
                     </Select>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Engine Type</Label>
-                    <Select value={formData.type} onValueChange={v => setFormData({...formData, type: v})}>
-                       <SelectTrigger className="h-14 rounded-2xl font-black uppercase tracking-tight text-md"><SelectValue /></SelectTrigger>
-                       <SelectContent className="rounded-2xl border-none shadow-2xl">
-                          <SelectItem value="knockout" className="font-bold uppercase py-3">Knockout (Direct)</SelectItem>
-                          <SelectItem value="group" className="font-bold uppercase py-3">Group Phase (Hybrid)</SelectItem>
-                       </SelectContent>
+                  <div className="space-y-4">
+                    <Label>Engine Type</Label>
+                    <Select
+                      value={formData.type}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, type: v })
+                      }
+                    >
+                      <SelectTrigger className="h-16">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="knockout">
+                          Knockout (Direct)
+                        </SelectItem>
+                        <SelectItem value="group">
+                          Group Phase (Hybrid)
+                        </SelectItem>
+                      </SelectContent>
                     </Select>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Management Protocol</Label>
-                    <Select value={formData.mode} onValueChange={v => setFormData({...formData, mode: v})}>
-                       <SelectTrigger className="h-14 rounded-2xl font-black uppercase tracking-tight text-md"><SelectValue /></SelectTrigger>
-                       <SelectContent className="rounded-2xl border-none shadow-2xl">
-                          <SelectItem value="self" className="font-bold uppercase py-3">Organizer Controlled</SelectItem>
-                          <SelectItem value="registration" className="font-bold uppercase py-3">Public Enlistment</SelectItem>
-                       </SelectContent>
-                    </Select>
+                  <div className="space-y-4">
+                    <Label>Unit Capacity</Label>
+                    <Input
+                      type="number"
+                      className="h-16 text-xl"
+                      value={formData.max_teams}
+                      onChange={(e) =>
+                        setFormData({ ...formData, max_teams: e.target.value })
+                      }
+                    />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Combatant Capacity</Label>
-                    <Input type="number" className="h-14 rounded-2xl font-black text-xl shadow-inner" value={formData.max_teams} onChange={e => setFormData({...formData, max_teams: e.target.value})} />
+                  <div className="space-y-4">
+                    <Label>Entry Fee (USD)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      className="h-16 text-xl"
+                      value={formData.entry_fee}
+                      onChange={(e) =>
+                        setFormData({ ...formData, entry_fee: e.target.value })
+                      }
+                    />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Entry Fee (USD)</Label>
-                    <Input type="number" step="0.01" className="h-14 rounded-2xl font-black text-xl shadow-inner text-primary" value={formData.entry_fee} onChange={e => setFormData({...formData, entry_fee: e.target.value})} />
+                  <div className="flex items-center justify-between p-8 bg-secondary border-2 border-foreground col-span-full">
+                    <div className="space-y-2">
+                      <Label>Public Deployment</Label>
+                      <p className="text-[10px] opacity-60 font-black uppercase tracking-widest">
+                        Visible to all active operators
+                      </p>
+                    </div>
+                    <Switch
+                      checked={formData.is_public}
+                      onCheckedChange={(v) =>
+                        setFormData({ ...formData, is_public: v })
+                      }
+                    />
                   </div>
+                </div>
 
-                  {formData.type === 'group' && (
-                     <>
-                        <div className="space-y-2">
-                           <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Sector Count (Groups)</Label>
-                           <Input type="number" className="h-14 rounded-2xl font-black text-xl shadow-inner" value={formData.group_count} onChange={e => setFormData({...formData, group_count: e.target.value})} />
-                        </div>
-                        <div className="space-y-2">
-                           <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Units per Sector</Label>
-                           <Input type="number" className="h-14 rounded-2xl font-black text-xl shadow-inner" value={formData.teams_per_group} onChange={e => setFormData({...formData, teams_per_group: e.target.value})} />
-                        </div>
-                        <div className="space-y-2 col-span-full">
-                           <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Promotion Protocol (Units to Advance)</Label>
-                           <Input type="number" className="h-14 rounded-2xl font-black text-xl shadow-inner" value={formData.promote_count} onChange={e => setFormData({...formData, promote_count: e.target.value})} />
-                        </div>
-                     </>
-                  )}
-
-                  <div className="flex items-center justify-between p-6 bg-muted/40 rounded-3xl border border-border/50 col-span-full">
-                     <div className="space-y-1">
-                        <Label className="font-black uppercase text-[11px] tracking-widest">Public Deployment</Label>
-                        <p className="text-[10px] text-muted-foreground font-bold uppercase">Visible in global sector search</p>
-                     </div>
-                     <Switch checked={formData.is_public} onCheckedChange={v => setFormData({...formData, is_public: v})} className="data-[state=checked]:bg-primary" />
-                  </div>
-               </div>
-
-               <DialogFooter>
-                  <Button type="submit" className="w-full h-16 rounded-2xl font-black text-xl shadow-2xl shadow-primary/30 transform hover:-translate-y-1 transition-all uppercase italic">Initiate Arena Deployment</Button>
-               </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <DialogFooter>
+                  <Button
+                    type="submit"
+                    className="w-full h-24 text-2xl uppercase italic tracking-tighter"
+                  >
+                    Initiate Deployment Protocol
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
-        </header>
+      </header>
 
-      <div className="flex flex-col md:flex-row gap-6 items-center justify-between bg-card/60 backdrop-blur-xl p-8 rounded-[3.5rem] border border-border/50 mx-4 shadow-xl">
-         <div className="flex gap-2 bg-muted/40 p-1.5 rounded-[1.5rem] border border-border/40">
-            <Button variant={activeTab === 'all' ? 'default' : 'ghost'} className={cn("rounded-2xl font-black text-[10px] uppercase tracking-widest px-8", activeTab === 'all' && "shadow-lg bg-card text-primary")} onClick={() => setActiveTab('all')}>Global Arenas</Button>
-            <Button variant={activeTab === 'mine' ? 'default' : 'ghost'} className={cn("rounded-2xl font-black text-[10px] uppercase tracking-widest px-8", activeTab === 'mine' && "shadow-lg bg-card text-primary")} onClick={() => setActiveTab('mine')}>My Arenas</Button>
-         </div>
+      <div className="flex flex-col md:flex-row gap-1 border-2 border-foreground bg-foreground">
+        <div className="flex flex-1 gap-1 bg-foreground">
+          <button
+            className={cn(
+              "flex-1 p-8 text-[10px] font-black uppercase tracking-[0.4em] transition-colors",
+              activeTab === "all"
+                ? "bg-background text-foreground"
+                : "bg-foreground text-background hover:bg-muted/10",
+            )}
+            onClick={() => setActiveTab("all")}
+          >
+            Global Network
+          </button>
+          <button
+            className={cn(
+              "flex-1 p-8 text-[10px] font-black uppercase tracking-[0.4em] transition-colors",
+              activeTab === "mine"
+                ? "bg-background text-foreground"
+                : "bg-foreground text-background hover:bg-muted/10",
+            )}
+            onClick={() => setActiveTab("mine")}
+          >
+            My Sectors
+          </button>
+        </div>
 
-         <div className="relative w-full md:max-w-md">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-muted-foreground/30" size={22} />
-            <Input 
-              placeholder="Filter Arenas..." 
-              className="pl-16 h-14 rounded-[1.5rem] bg-muted/30 border-none font-black text-lg shadow-inner focus:ring-4 focus:ring-primary/10 uppercase tracking-tighter"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-         </div>
+        <div className="relative flex-[1.5] bg-background">
+          <Search
+            className="absolute left-8 top-1/2 -translate-y-1/2 opacity-20"
+            size={24}
+          />
+          <Input
+            placeholder="Search Signal Data..."
+            className="pl-20 h-24 border-none text-2xl italic tracking-tighter placeholder:opacity-10"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       </div>
 
-      <div className={cn(
-        "grid gap-10 px-4",
-        view === 'grid' ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
-      )}>
-        {filtered.map(t => (
-          <Card key={t.id} className="group relative overflow-hidden rounded-[3.5rem] border-none shadow-xl hover:shadow-2xl transition-all duration-500 bg-card p-10 space-y-8">
-            <div className="absolute top-0 left-0 w-full h-1.5 bg-primary/10 group-hover:bg-primary transition-colors" />
-            
-            <div className="flex justify-between items-start">
-               <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] tracking-widest uppercase px-4 py-1.5 rounded-full">
-                  {t.sport}
-               </Badge>
-               <div className="flex gap-3">
-                  {t.creator_id === user?.user_id && <Badge className="bg-orange-500/10 text-orange-600 border-none font-black text-[9px] uppercase px-3">Owner</Badge>}
-                  {t.is_public ? <Globe size={18} className="text-green-500/30 group-hover:text-green-500 transition-colors"/> : <Lock size={18} className="text-orange-500/30 group-hover:text-orange-500 transition-colors"/>}
-               </div>
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1 bg-foreground border-2 border-foreground">
+        {filtered.map((t) => (
+          <Card
+            key={t.id}
+            className="border-none p-12 group hover:bg-muted transition-colors rounded-none"
+          >
+            <div className="flex flex-col h-full space-y-12">
+              <div className="flex justify-between items-start">
+                <Badge variant="outline">{t.sport}</Badge>
+                <div className="flex gap-4 opacity-20 group-hover:opacity-100 transition-opacity">
+                  {t.creator_id === user?.user_id && (
+                    <Badge className="bg-foreground text-background border-none">
+                      Owner
+                    </Badge>
+                  )}
+                  {t.is_public ? <Globe size={20} /> : <Lock size={20} />}
+                </div>
+              </div>
 
-            <div className="space-y-2">
-               <h2 className="text-3xl font-black tracking-tighter uppercase italic group-hover:text-primary transition-colors leading-none">{t.name}</h2>
-               <p className="font-bold text-[10px] uppercase tracking-[0.2em] text-muted-foreground opacity-40">Sector-ID: {t.id.split('-')[0]}</p>
-            </div>
+              <div className="space-y-4 flex-1">
+                <h2 className="text-4xl font-black tracking-tighter uppercase italic leading-[0.9]">
+                  {t.name}
+                </h2>
+                <p className="text-[9px] font-black uppercase tracking-[0.3em] opacity-30 italic">
+                  Sector-ID: {String(t.id || "").split("-")[0]}
+                </p>
+              </div>
 
-            <div className="grid grid-cols-2 gap-6 mt-8">
-               <div className="bg-muted/30 p-5 rounded-[2rem] space-y-1 group-hover:bg-primary/5 transition-colors">
-                  <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest flex items-center gap-2"><Users size={12}/> Slots</p>
-                  <p className="text-2xl font-black italic">{t.max_teams} Units</p>
-               </div>
-               <div className="bg-muted/30 p-5 rounded-[2rem] space-y-1 group-hover:bg-primary/5 transition-colors">
-                  <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest flex items-center gap-2"><Activity size={12}/> Engine</p>
-                  <p className="text-2xl font-black capitalize italic">{t.type}</p>
-               </div>
-            </div>
+              <div className="grid grid-cols-2 gap-1 bg-foreground border-2 border-foreground mt-8">
+                <div className="bg-background p-6 space-y-1">
+                  <p className="text-[9px] font-black opacity-40 uppercase tracking-widest flex items-center gap-2">
+                    <Users size={12} /> Capacity
+                  </p>
+                  <p className="text-2xl font-black italic uppercase">
+                    {t.max_teams}
+                  </p>
+                </div>
+                <div className="bg-background p-6 space-y-1">
+                  <p className="text-[9px] font-black opacity-40 uppercase tracking-widest flex items-center gap-2">
+                    <Activity size={12} /> Protocol
+                  </p>
+                  <p className="text-2xl font-black italic uppercase">
+                    {t.type}
+                  </p>
+                </div>
+              </div>
 
-            <Button asChild className="w-full h-16 rounded-[1.5rem] font-black text-lg shadow-xl shadow-primary/10 group-hover:shadow-primary/30 transition-all transform group-hover:-translate-y-1">
-               <Link to={`/tournament/${t.id}`}>ACCESS ARENA <ChevronRight size={22} className="ml-1 group-hover:translate-x-1 transition-transform"/></Link>
-            </Button>
+              <Button
+                asChild
+                className="w-full h-20 text-lg uppercase italic tracking-tighter border-2 border-foreground"
+              >
+                <Link
+                  to={`/tournament/${t.id}`}
+                  className="flex items-center justify-between px-8"
+                >
+                  Access Link <ChevronRight size={24} strokeWidth={3} />
+                </Link>
+              </Button>
+            </div>
           </Card>
         ))}
       </div>
 
       {filtered.length === 0 && (
-         <div className="py-48 text-center space-y-8 bg-muted/10 rounded-[4rem] border-4 border-dashed border-border/50 mx-4">
-            <Trophy size={80} className="mx-auto text-muted-foreground/10 animate-pulse" />
+        <div className="py-48 text-center border-4 border-foreground border-dashed">
+          <div className="space-y-8 max-w-md mx-auto">
+            <Trophy size={80} strokeWidth={1} className="mx-auto opacity-10" />
             <div className="space-y-2">
-               <p className="text-4xl font-black text-muted-foreground/30 uppercase tracking-tighter italic">No Signals Detected</p>
-               <p className="text-xs font-bold text-muted-foreground/20 uppercase tracking-[0.5em]">Adjust filters or initialize a new arena</p>
+              <p className="text-4xl font-black uppercase tracking-tighter italic opacity-30">
+                Zero Signals
+              </p>
+              <p className="text-[10px] font-black uppercase tracking-[0.5em] opacity-20 italic">
+                Initialize a new arena sector to begin operations
+              </p>
             </div>
-         </div>
+          </div>
+        </div>
       )}
     </div>
   );

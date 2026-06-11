@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { teamService } from '@/services/teamService';
 import { useAuth } from '@/context/AuthContext';
 import { 
-  Users, Plus, Search, ChevronRight, Shield, 
+  Users, Plus, Search, Shield, 
   Globe, Lock, Trophy, UserPlus, LogOut, ArrowRight,
-  ShieldCheck, AlertCircle, Info, Activity
+  AlertCircle
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
 // UI Components
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, 
@@ -30,11 +30,9 @@ const TeamsListPage = () => {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Modal states
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
 
-  // Form states
   const [formData, setFormData] = useState({
     name: '',
     sport: 'football',
@@ -42,10 +40,6 @@ const TeamsListPage = () => {
     is_public: true
   });
   const [inviteCode, setInviteCode] = useState('');
-
-  useEffect(() => {
-    fetchData();
-  }, []);
 
   const fetchData = async () => {
     try {
@@ -61,6 +55,10 @@ const TeamsListPage = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -87,8 +85,8 @@ const TeamsListPage = () => {
   const handleLeave = async (team) => {
     const isOwner = team.owner_id === user?.user_id || user?.is_admin;
     const msg = isOwner 
-      ? 'Are you sure you want to DISBAND this squad? All data will be lost.' 
-      : 'Are you sure you want to LEAVE this squad?';
+      ? 'DISBAND SQUAD?' 
+      : 'LEAVE SQUAD?';
       
     if (!window.confirm(msg)) return;
     
@@ -107,70 +105,73 @@ const TeamsListPage = () => {
   const hasTeam = myTeams.length > 0;
   const filtered = teams.filter(t => t.name.toLowerCase().includes(search.toLowerCase()));
 
-  if (loading) return <div className="p-12 text-center font-black animate-pulse text-muted-foreground uppercase tracking-[0.3em]">SYNCHRONIZING SQUAD REGISTRY...</div>;
+  if (loading) return (
+    <div className="p-24 text-center font-black uppercase tracking-[0.5em] animate-pulse">
+      Syncing Global Squad Registry...
+    </div>
+  );
 
   return (
-    <div className="max-w-7xl mx-auto space-y-12 pb-24">
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 px-4">
-        <div className="space-y-2">
-          <h1 className="text-6xl font-black tracking-tighter uppercase italic">Squad Command</h1>
-          <p className="text-primary font-black uppercase text-xs tracking-[0.4em]">Global Personnel Roster & Deployment</p>
+    <div className="max-w-6xl mx-auto py-12 px-4 space-y-24">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-12 border-l-8 border-foreground pl-12 py-4">
+        <div className="space-y-4">
+          <Badge variant="outline">Sector: Personnel Management</Badge>
+          <h1 className="text-7xl font-black tracking-tighter italic uppercase leading-none">Squad Hub</h1>
+          <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-50 italic">Global Roster Enrollment & Operations</p>
         </div>
 
-        <div className="flex gap-4">
+        <div className="flex flex-col sm:flex-row gap-4">
            {hasTeam ? (
-              <div className="flex gap-3">
-                 <Button asChild size="lg" className="h-16 px-10 rounded-2xl font-black shadow-2xl shadow-primary/20 gap-3 group">
-                    <Link to={`/team/${myTeams[0].id}`}>
-                       ENTER SQUAD HUD <ArrowRight className="group-hover:translate-x-1 transition-transform" />
+              <div className="flex gap-4">
+                 <Button asChild className="h-20 px-10 gap-4 font-black uppercase italic">
+                    <Link to={`/team/${myTeams[0].id}`} className="flex items-center gap-4">
+                       Enter Squad HUD <ArrowRight size={24} strokeWidth={3} />
                     </Link>
                  </Button>
-                 <Button onClick={() => handleLeave(myTeams[0])} variant="ghost" size="lg" className="h-16 px-6 rounded-2xl font-black text-red-500 hover:bg-red-500/10 gap-3">
-                    <LogOut size={18} /> {myTeams[0].owner_id === user?.user_id ? 'DISBAND' : 'LEAVE'}
+                 <Button onClick={() => handleLeave(myTeams[0])} variant="outline" className="h-20 px-8 border-2 font-black italic">
+                    {myTeams[0].owner_id === user?.user_id ? 'DISBAND' : 'LEAVE'}
                  </Button>
               </div>
            ) : (
-              <div className="flex gap-3">
+              <div className="flex gap-4">
                  <Dialog open={createOpen} onOpenChange={setCreateOpen}>
                     <DialogTrigger asChild>
-                       <Button size="lg" className="h-16 px-10 rounded-2xl font-black shadow-2xl shadow-primary/20 gap-3 group">
-                          <Plus className="group-hover:rotate-90 transition-transform duration-300" /> ENLIST SQUAD
+                       <Button className="h-20 px-10 gap-4 font-black uppercase italic">
+                          <Plus size={24} strokeWidth={3} /> ENLIST SQUAD
                        </Button>
                     </DialogTrigger>
-                    <DialogContent className="rounded-[3rem] border-none shadow-2xl p-0 overflow-hidden max-w-xl">
-                       <DialogHeader className="bg-primary p-12 text-primary-foreground">
-                          <DialogTitle className="text-4xl font-black uppercase italic tracking-tighter">Enlist New Squad</DialogTitle>
-                          <DialogDescription className="text-primary-foreground/70 font-bold uppercase text-[10px] tracking-[0.3em] mt-2">Establish your command in the ecosystem</DialogDescription>
+                    <DialogContent className="max-w-xl">
+                       <DialogHeader className="bg-foreground text-background -m-12 p-12 mb-12">
+                          <DialogTitle className="text-5xl uppercase">Enlist Unit</DialogTitle>
+                          <DialogDescription className="text-background/60 font-black uppercase tracking-widest mt-2">Establish new operational squad</DialogDescription>
                        </DialogHeader>
-                       <form onSubmit={handleCreate} className="p-12 space-y-8">
-                          <div className="space-y-6">
-                             <div className="space-y-2">
-                                <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Squad Designation</Label>
-                                <Input placeholder="E.g. VANGUARD ONE" className="h-14 rounded-2xl font-black text-lg uppercase" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
+                       <form onSubmit={handleCreate} className="space-y-12">
+                          <div className="space-y-8">
+                             <div className="space-y-4">
+                                <Label>Squad Designation</Label>
+                                <Input placeholder="E.G. VANGUARD_ONE" className="h-16 text-2xl italic" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
                              </div>
-                             <div className="space-y-2">
-                                <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Operational Discipline</Label>
+                             <div className="space-y-4">
+                                <Label>Operational Discipline</Label>
                                 <Select value={formData.sport} onValueChange={v => setFormData({...formData, sport: v})}>
-                                   <SelectTrigger className="h-14 rounded-2xl font-black uppercase tracking-tight text-md">
-                                      <SelectValue />
-                                   </SelectTrigger>
-                                   <SelectContent className="rounded-2xl border-none shadow-2xl">
-                                      <SelectItem value="football" className="font-bold uppercase tracking-tight py-3">Football Operations</SelectItem>
-                                      <SelectItem value="cricket" className="font-bold uppercase tracking-tight py-3">Cricket Operations</SelectItem>
-                                      <SelectItem value="basketball" className="font-bold uppercase tracking-tight py-3">Basketball Operations</SelectItem>
+                                   <SelectTrigger className="h-16"><SelectValue /></SelectTrigger>
+                                   <SelectContent>
+                                      <SelectItem value="football">Football</SelectItem>
+                                      <SelectItem value="cricket">Cricket</SelectItem>
+                                      <SelectItem value="basketball">Basketball</SelectItem>
                                    </SelectContent>
                                 </Select>
                              </div>
-                             <div className="flex items-center justify-between p-5 bg-muted/30 rounded-2xl border border-border/50">
-                                <div className="space-y-0.5">
-                                   <Label className="font-black uppercase text-[10px] tracking-widest pl-1">Public Registry</Label>
-                                   <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">Listed in global search for recruitment</p>
+                             <div className="flex items-center justify-between p-8 bg-secondary border-2 border-foreground">
+                                <div className="space-y-2">
+                                   <Label>Public Registry</Label>
+                                   <p className="text-[10px] opacity-60 font-black uppercase tracking-widest italic">Listed for global recruitment</p>
                                 </div>
                                 <Switch checked={formData.is_public} onCheckedChange={v => setFormData({...formData, is_public: v})} />
                              </div>
                           </div>
                           <DialogFooter>
-                             <Button type="submit" className="w-full h-16 rounded-2xl font-black text-xl shadow-xl shadow-primary/20">INITIATE ENLISTMENT</Button>
+                             <Button type="submit" className="w-full h-24 text-2xl uppercase italic">Initiate Enlistment</Button>
                           </DialogFooter>
                        </form>
                     </DialogContent>
@@ -178,22 +179,22 @@ const TeamsListPage = () => {
 
                  <Dialog open={joinOpen} onOpenChange={setJoinOpen}>
                     <DialogTrigger asChild>
-                       <Button size="lg" variant="outline" className="h-16 px-10 rounded-2xl font-black border-primary/20 gap-3 shadow-xl">
-                          <UserPlus size={18} /> JOIN SQUAD
+                       <Button variant="outline" className="h-20 px-10 border-2 font-black italic">
+                          JOIN_UNIT
                        </Button>
                     </DialogTrigger>
-                    <DialogContent className="rounded-[3rem] border-none shadow-2xl p-0 overflow-hidden max-w-md">
-                       <DialogHeader className="bg-muted p-12">
-                          <DialogTitle className="text-3xl font-black uppercase italic tracking-tighter">Transmission Check</DialogTitle>
-                          <DialogDescription className="font-bold uppercase text-[10px] tracking-widest mt-2 text-muted-foreground/60">Enter the authorized squad invite code</DialogDescription>
+                    <DialogContent className="max-w-md">
+                       <DialogHeader>
+                          <DialogTitle>Vector Access</DialogTitle>
+                          <DialogDescription>Input authorized squad invitation code</DialogDescription>
                        </DialogHeader>
-                       <form onSubmit={handleJoin} className="p-12 space-y-8">
-                          <div className="space-y-2">
-                             <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground pl-1">Invite Vector Code</Label>
-                             <Input placeholder="E.g. A9F2X3" className="h-16 rounded-2xl font-black text-2xl tracking-[0.5em] text-center uppercase" value={inviteCode} onChange={e => setInviteCode(e.target.value)} required />
+                       <form onSubmit={handleJoin} className="space-y-12 py-8">
+                          <div className="space-y-4">
+                             <Label>Invite Vector Code</Label>
+                             <Input placeholder="A9F2X3" className="h-20 text-4xl text-center tracking-[0.3em]" value={inviteCode} onChange={e => setInviteCode(e.target.value)} required />
                           </div>
                           <DialogFooter>
-                             <Button type="submit" className="w-full h-16 rounded-2xl font-black text-lg">VERIFY & DEPLOY</Button>
+                             <Button type="submit" className="w-full h-20 text-xl italic uppercase">Verify & Link</Button>
                           </DialogFooter>
                        </form>
                     </DialogContent>
@@ -204,72 +205,71 @@ const TeamsListPage = () => {
       </header>
 
       {/* Stats Ribbon */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 px-4">
-         <Card className="bg-primary/5 border-none shadow-xl rounded-[3rem] p-10 group overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-8 opacity-5"><Users size={120} /></div>
-            <p className="text-[10px] font-black uppercase text-primary tracking-[0.4em] mb-3">Active Units</p>
-            <p className="text-6xl font-black tracking-tighter uppercase italic">{teams.length}</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-1 bg-foreground border-2 border-foreground">
+         <Card className="border-none p-12 bg-background rounded-none">
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 mb-6">Active Units</p>
+            <p className="text-7xl font-black tracking-tighter uppercase italic leading-none">{teams.length}</p>
          </Card>
-         <Card className="bg-muted border-none shadow-xl rounded-[3rem] p-10 group overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-8 opacity-5"><Globe size={120} /></div>
-            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.4em] mb-3">Open Recruits</p>
-            <p className="text-6xl font-black tracking-tighter uppercase italic text-muted-foreground">{teams.filter(t => t.is_public).length}</p>
+         <Card className="border-none p-12 bg-background rounded-none">
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 mb-6">Open Registry</p>
+            <p className="text-7xl font-black tracking-tighter uppercase italic leading-none">{teams.filter(t => t.is_public).length}</p>
          </Card>
-         <Card className="bg-orange-500/5 border-none shadow-xl rounded-[3rem] p-10 group overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-8 opacity-5"><Trophy size={120} /></div>
-            <p className="text-[10px] font-black uppercase text-orange-600 tracking-[0.4em] mb-3">My Standing</p>
-            <p className="text-6xl font-black tracking-tighter uppercase italic text-orange-600">{hasTeam ? 'ENLISTED' : 'STANDBY'}</p>
+         <Card className="border-none p-12 bg-background rounded-none">
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 mb-6">Unit Status</p>
+            <p className="text-5xl font-black tracking-tighter uppercase italic leading-none">{hasTeam ? 'ENLISTED' : 'STANDBY'}</p>
          </Card>
       </div>
 
-      <div className="space-y-8 px-4">
-         <div className="relative max-w-2xl">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-muted-foreground/40" size={24} />
+      <div className="space-y-12">
+         <div className="relative">
+            <Search className="absolute left-8 top-1/2 -translate-y-1/2 opacity-20" size={24} />
             <Input 
               placeholder="Search Global Squad Registry..." 
-              className="pl-16 h-16 rounded-[2rem] bg-card border-none font-black text-lg shadow-2xl focus:ring-4 focus:ring-primary/10 transition-all uppercase tracking-tight"
+              className="pl-20 h-24 border-2 border-foreground italic text-2xl tracking-tighter placeholder:opacity-10"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
          </div>
 
-         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1 bg-foreground border-2 border-foreground">
             {filtered.map(t => (
-               <Card key={t.id} className="group relative overflow-hidden rounded-[3.5rem] border-none shadow-xl hover:shadow-2xl transition-all duration-500 bg-card p-10 space-y-8">
-                  <div className="absolute top-0 left-0 w-full h-1.5 bg-primary/10 group-hover:bg-primary transition-colors" />
-                  
-                  <div className="flex justify-between items-start">
-                     <Badge variant="outline" className="font-black text-[9px] tracking-widest uppercase border-primary/20 text-primary px-3 py-1 rounded-full">{t.sport}</Badge>
-                     {t.is_public ? <Globe size={18} className="text-green-500/30 group-hover:text-green-500 transition-colors" /> : <Lock size={18} className="text-orange-500/30" />}
-                  </div>
-
-                  <div className="space-y-2">
-                     <h3 className="text-3xl font-black uppercase tracking-tighter italic group-hover:text-primary transition-colors leading-none">{t.name}</h3>
-                     <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Commanded by ID: {t.owner_id}</p>
-                  </div>
-
-                  <p className="text-muted-foreground font-bold text-sm leading-relaxed line-clamp-3 italic opacity-60 group-hover:opacity-100 transition-opacity">
-                     {t.description || 'No operational brief provided for this squad.'}
-                  </p>
-
-                  <div className="pt-4 border-t border-border/40 flex items-center justify-between">
-                     <div className="flex -space-x-3 overflow-hidden">
-                        {[1, 2, 3].map(i => (
-                           <div key={i} className="w-10 h-10 rounded-full bg-muted border-4 border-card flex items-center justify-center font-black text-[10px] text-muted-foreground shadow-lg">?</div>
-                        ))}
+               <Card key={t.id} className="border-none p-12 bg-background rounded-none hover:bg-muted transition-colors group">
+                  <div className="flex flex-col h-full space-y-8">
+                     <div className="flex justify-between items-start">
+                        <Badge variant="outline">{t.sport}</Badge>
+                        <div className="opacity-20 group-hover:opacity-100 transition-opacity">
+                           {t.is_public ? <Globe size={18} /> : <Lock size={18} />}
+                        </div>
                      </div>
-                     <Button asChild size="sm" className="rounded-xl font-black shadow-lg shadow-primary/20 h-10 px-6 transform group-hover:-translate-y-0.5 transition-all">
-                        <Link to={`/team/${t.id}`}>INTEL HUD</Link>
-                     </Button>
+
+                     <div className="space-y-2">
+                        <h3 className="text-4xl font-black uppercase tracking-tighter italic leading-[0.9]">{t.name}</h3>
+                        <p className="text-[9px] font-black opacity-30 uppercase tracking-[0.3em]">Operator: {String(t.owner_id || '').split('-')[0]}</p>
+                     </div>
+
+                     <p className="text-sm font-bold uppercase leading-tight italic opacity-60 group-hover:opacity-100 transition-opacity line-clamp-3">
+                        {t.description || 'No operational brief available.'}
+                     </p>
+
+                     <div className="pt-8 mt-auto border-t-2 border-foreground/10 flex items-center justify-between">
+                        <div className="flex -space-x-3 grayscale opacity-30 group-hover:opacity-100 group-hover:grayscale-0 transition-all">
+                           {[1, 2, 3].map(i => (
+                              <div key={i} className="w-10 h-10 border-2 border-foreground bg-muted flex items-center justify-center font-black text-[10px]">?</div>
+                           ))}
+                        </div>
+                        <Button asChild className="h-14 border-2 border-foreground font-black uppercase italic tracking-tighter">
+                           <Link to={`/team/${t.id}`}>ACCESS_INTEL</Link>
+                        </Button>
+                     </div>
                   </div>
                </Card>
             ))}
          </div>
 
          {filtered.length === 0 && (
-            <div className="py-40 text-center space-y-6 bg-muted/10 rounded-[4rem] border-4 border-dashed border-border/50">
-               <AlertCircle size={64} className="mx-auto text-muted-foreground/10" />
-               <p className="text-muted-foreground font-black uppercase text-xs tracking-[0.4em]">No squads detected in registry</p>
+            <div className="py-48 text-center border-4 border-foreground border-dashed">
+               <AlertCircle size={80} strokeWidth={1} className="mx-auto opacity-10" />
+               <p className="text-3xl font-black uppercase tracking-tighter italic opacity-20">No Squads Logged</p>
             </div>
          )}
       </div>

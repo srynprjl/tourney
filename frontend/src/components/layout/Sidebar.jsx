@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   Trophy,
@@ -18,7 +18,6 @@ import { cn } from "@/lib/utils";
 const Sidebar = () => {
   const { darkMode, setDarkMode } = useTheme();
   const { user, logout } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -28,75 +27,66 @@ const Sidebar = () => {
   };
 
   const navItems = [
-    { name: "Dashboard", path: "/", icon: LayoutDashboard },
-    { name: "Arenas", path: "/tournaments", icon: Trophy },
-    { name: "Teams", path: "/teams", icon: Users },
+    { name: "01. Dashboard", path: "/dashboard", icon: LayoutDashboard },
+    { name: "02. Arenas", path: "/tournaments", icon: Trophy },
+    { name: "03. Squads", path: "/teams", icon: Users },
   ];
 
   if (user) {
-    navItems.push({ name: "My Profile", path: `/player/${user.username}`, icon: Award });
+    navItems.push({ name: "04. Identity", path: `/player/${user.username}`, icon: Award });
   }
 
   if (user?.is_admin) {
-    navItems.push({ name: "Admin Panel", path: "/admin", icon: ShieldCheck });
+    navItems.push({ name: "05. Command", path: "/admin", icon: ShieldCheck });
   }
 
   return (
     <aside
-      className={cn(
-        "bg-card border-r transition-all duration-300 flex flex-col fixed h-full z-50",
-        isSidebarOpen ? "w-64" : "w-20",
-      )}
+      className="bg-background border-r-2 border-foreground w-64 flex flex-col fixed h-full z-50 font-sans"
     >
-      <div className="p-6 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Trophy className="text-primary w-6 h-6" />
-          {isSidebarOpen && (
-            <span className="font-bold text-xl tracking-tight">TourneyPro</span>
-          )}
-        </div>
+      <div className="p-8 flex items-center justify-between border-b-2 border-foreground">
+        <Link to="/dashboard" className="flex items-center gap-3">
+          <Trophy className="w-6 h-6" strokeWidth={3} />
+          <span className="font-black text-xl uppercase tracking-tighter italic">TourneyPro</span>
+        </Link>
       </div>
 
-      <nav className="flex-1 px-4 space-y-2">
+      <nav className="flex-1 p-6 space-y-1">
         {navItems.map((item) => (
           <Link
             key={item.path}
             to={item.path}
             className={cn(
-              "flex items-center p-3 rounded-lg transition-all",
+              "flex items-center p-4 transition-all text-[10px] font-black uppercase tracking-widest",
               location.pathname === item.path
-                ? "bg-primary text-primary-foreground shadow-md"
-                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                ? "bg-foreground text-background"
+                : "text-foreground hover:bg-muted",
             )}
           >
-            <item.icon size={20} />
-            {isSidebarOpen && (
-              <span className="ml-3 font-medium">{item.name}</span>
-            )}
+            <item.icon size={16} className="mr-4" strokeWidth={2.5} />
+            <span>{item.name}</span>
           </Link>
         ))}
       </nav>
 
-      <div className="p-4 border-t space-y-2">
+      <div className="p-6 border-t-2 border-foreground space-y-1">
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start gap-3"
+          className="w-full justify-start gap-4 text-[10px] font-black uppercase tracking-widest h-12"
           onClick={() => setDarkMode(!darkMode)}
         >
-          {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-          {isSidebarOpen && (
-            <span>{darkMode ? "Light Theme" : "Dark Theme"}</span>
-          )}
+          {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+          <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
         </Button>
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start gap-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          className="w-full justify-start gap-4 text-[10px] font-black uppercase tracking-widest h-12 text-foreground hover:bg-foreground hover:text-background"
           onClick={handleLogout}
         >
-          <LogOut size={20} />
-          {isSidebarOpen && <span>Logout</span>}
+          <LogOut size={16} />
+          <span>Exit System</span>
         </Button>
       </div>
     </aside>

@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { AuthProvider } from '@/context/AuthContext';
@@ -8,6 +7,7 @@ import MainLayout from '@/components/layout/MainLayout';
 import LoginPage from '@/pages/auth/LoginPage';
 import RegisterPage from '@/pages/auth/RegisterPage';
 import ApplicationPage from '@/pages/auth/ApplicationPage';
+import LandingPage from '@/pages/LandingPage';
 import DashboardPage from '@/pages/dashboard/DashboardPage';
 import TournamentsPage from '@/pages/tournament/TournamentsPage';
 import TournamentDetailsPage from '@/pages/tournament/TournamentDetailsPage';
@@ -23,10 +23,11 @@ function App() {
         <Router>
           <MainLayout>
             <Routes>
+              <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/apply" element={<ApplicationPage />} />
-              <Route path="/" element={<DashboardPage />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/tournaments" element={<TournamentsPage />} />
               <Route path="/tournament/:id" element={<TournamentDetailsPage />} />
               <Route path="/admin" element={<AdminDashboardPage />} />

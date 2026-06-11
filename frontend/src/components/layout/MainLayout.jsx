@@ -1,8 +1,6 @@
-import React from 'react';
 import { useLocation, Navigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useAuth } from '@/context/AuthContext';
-import { cn } from "@/lib/utils";
 
 const MainLayout = ({ children }) => {
   const { user, loading } = useAuth();
@@ -13,12 +11,13 @@ const MainLayout = ({ children }) => {
   }
 
   const isAuthPage = ['/login', '/register'].includes(location.pathname);
+  const isLandingPage = location.pathname === '/';
 
-  if (!user && !isAuthPage) {
+  if (!user && !isAuthPage && !isLandingPage) {
     return <Navigate to="/login" />;
   }
 
-  if (isAuthPage) {
+  if (isAuthPage || isLandingPage) {
     return <>{children}</>;
   }
 

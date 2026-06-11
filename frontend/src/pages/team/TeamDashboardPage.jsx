@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { teamService } from '@/services/teamService';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { 
   Users, Newspaper, MessageSquare, Shield, 
-  Settings, UserPlus, Send, Clock, Trash2, 
-  ChevronRight, Award, Trophy, Briefcase, LayoutDashboard
+  UserPlus, Send, Clock, Trash2, 
+  ChevronRight, Trophy, Briefcase, LayoutDashboard
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { useAuth } from '@/context/AuthContext';
@@ -13,7 +13,7 @@ import { useAuth } from '@/context/AuthContext';
 // UI Components
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
@@ -28,7 +28,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus } from "lucide-react";
+import { Plus, ShieldCheck } from "lucide-react";
 
 const TeamDashboardPage = () => {
   const { id } = useParams();
@@ -39,7 +39,6 @@ const TeamDashboardPage = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [apps, setApps] = useState([]);
   
-  // Award states
   const [awardModalOpen, setAwardModalOpen] = useState(false);
   const [newAward, setNewAward] = useState({ title: '', description: '' });
 
@@ -48,22 +47,6 @@ const TeamDashboardPage = () => {
   const chatEndRef = useRef(null);
 
   const wsMessage = useWebSocket(id);
-
-  useEffect(() => {
-    fetchTeam();
-    fetchPosts();
-    fetchChatHistory();
-  }, [id]);
-
-  useEffect(() => {
-    if (wsMessage && wsMessage.type === 'chat_message') {
-      setChatHistory(prev => [...prev, wsMessage.data]);
-    }
-  }, [wsMessage]);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages, activeTab]);
 
   const fetchTeam = async () => {
     try {
@@ -104,6 +87,22 @@ const TeamDashboardPage = () => {
     }
   };
 
+  useEffect(() => {
+    fetchTeam();
+    fetchPosts();
+    fetchChatHistory();
+  }, [id]);
+
+  useEffect(() => {
+    if (wsMessage && wsMessage.type === 'chat_message') {
+      setChatHistory(prev => [...prev, wsMessage.data]);
+    }
+  }, [wsMessage]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, activeTab]);
+
   const handleCreatePost = async (e) => {
     e.preventDefault();
     try {
@@ -137,7 +136,7 @@ const TeamDashboardPage = () => {
   };
 
   const handleRemoveMember = async (userId) => {
-    if (!window.confirm('Remove this member from the squad?')) return;
+    if (!window.confirm('Remove this member?')) return;
     try {
       await teamService.removeMember(id, userId);
       fetchTeam();
@@ -159,7 +158,7 @@ const TeamDashboardPage = () => {
   };
 
   const handleDeleteAward = async (awardId) => {
-    if (!window.confirm('Delete this achievement?')) return;
+    if (!window.confirm('Delete award?')) return;
     try {
       await teamService.deleteAward(id, awardId);
       fetchTeam();
@@ -168,7 +167,11 @@ const TeamDashboardPage = () => {
     }
   };
 
-  if (!team) return <div className="p-12 text-center font-black animate-pulse text-muted-foreground uppercase tracking-widest">CONNECTING TO SQUAD HUD...</div>;
+  if (!team) return (
+    <div className="p-24 text-center font-black uppercase tracking-[0.5em] animate-pulse">
+      Connecting to Squad Intelligence Hub...
+    </div>
+  );
 
   const isOwner = team.owner_id === currentUser?.user_id || currentUser?.is_admin;
   const isMember = team.members?.some(m => m.user_id === currentUser?.user_id);
@@ -176,38 +179,38 @@ const TeamDashboardPage = () => {
 
   if (!isMember && !isOwner) {
     return (
-      <div className="max-w-4xl mx-auto space-y-12 py-20">
-        <div className="text-center space-y-6">
-          <Shield size={80} className="mx-auto text-primary/20" />
-          <h1 className="text-6xl font-black tracking-tighter uppercase italic">{team.name}</h1>
-          <p className="text-muted-foreground font-bold text-xl">Operational clearance required to access this squad HUD.</p>
-        </div>
+      <div className="max-w-4xl mx-auto py-24 px-4 space-y-20">
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-12 border-l-8 border-foreground pl-12 py-4">
+          <div className="space-y-4">
+            <Badge variant="outline">Sector: Enlistment Required</Badge>
+            <h1 className="text-7xl font-black tracking-tighter italic uppercase leading-none">{team.name}</h1>
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-50 italic">Operational Clearance Necessary</p>
+          </div>
+        </header>
         
-        <Card className="rounded-[3rem] border-none shadow-2xl p-12 bg-card space-y-8">
+        <div className="border-4 border-foreground p-12 bg-background space-y-12">
           {myApp ? (
-            <div className="text-center py-12 space-y-6">
-              <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto shadow-xl">
-                 <ShieldCheck size={40} className="text-green-500" />
-              </div>
+            <div className="text-center py-20 space-y-8">
+              <ShieldCheck size={80} strokeWidth={1} className="mx-auto" />
               <div className="space-y-2">
-                 <h2 className="text-3xl font-black uppercase tracking-tight italic">Application Transmitted</h2>
-                 <p className="text-muted-foreground font-medium">Your credentials have been successfully uploaded to the squad registry. Awaiting commander vetting.</p>
+                 <h2 className="text-4xl font-black uppercase italic tracking-tighter">Application Logged</h2>
+                 <p className="text-sm font-bold uppercase opacity-60">Vetting process in progress. Awaiting command decision.</p>
               </div>
-              <Button asChild variant="outline" className="rounded-2xl font-black px-10 h-14 border-primary/20 text-primary">
-                 <Link to="/teams">RETURN TO SQUAD LIST</Link>
+              <Button asChild variant="outline" className="border-2 font-black italic">
+                 <Link to="/teams">Return to Registry</Link>
               </Button>
             </div>
           ) : (
             <>
               <div className="space-y-4">
-                <h2 className="text-2xl font-black uppercase tracking-tight italic">Enlistment Request</h2>
-                <p className="text-muted-foreground font-medium">Transmit your credentials and a brief operational message to the squad commander for vetting.</p>
+                <h2 className="text-3xl font-black uppercase italic tracking-tighter">Request Enlistment</h2>
+                <p className="text-sm font-bold uppercase opacity-60">Submit operational intent for vetting.</p>
               </div>
               
-              <div className="space-y-4">
+              <div className="space-y-8">
                 <textarea 
-                  className="w-full min-h-[150px] p-8 bg-muted/30 rounded-[2rem] outline-none focus:ring-2 focus:ring-primary font-medium italic"
-                  placeholder="Why should you be part of this squad?"
+                  className="w-full min-h-[200px] p-8 border-2 border-foreground outline-none font-bold uppercase italic tracking-tight"
+                  placeholder="Operational Motivation..."
                   id="appMessage"
                 />
                 <Button 
@@ -215,90 +218,92 @@ const TeamDashboardPage = () => {
                     const msg = document.getElementById('appMessage').value;
                     try {
                       await teamService.apply(id, msg);
-                      alert('Application transmitted successfully');
+                      alert('Application Transmitted');
                       fetchApplications();
                     } catch (err) {
-                      alert(err.response?.data?.error || 'Transmission failed');
+                      alert('Transmission Failed');
                     }
                   }}
-                  className="w-full h-16 rounded-[1.5rem] font-black text-xl shadow-xl shadow-primary/20"
+                  className="w-full h-24 text-2xl uppercase italic"
                 >
-                  TRANSMIT APPLICATION
+                  Transmit Enlistment File
                 </Button>
               </div>
             </>
           )}
-        </Card>
+        </div>
       </div>
     );
   }
 
   const tabs = [
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    { id: 'news', label: 'Team Feed', icon: Newspaper },
-    { id: 'chat', label: 'Squad Chat', icon: MessageSquare },
-    { id: 'roster', label: 'Roster', icon: Users },
-    { id: 'achievements', label: 'Awards', icon: Trophy },
+    { id: 'overview', label: '01. Intel', icon: LayoutDashboard },
+    { id: 'news', label: '02. Feed', icon: Newspaper },
+    { id: 'chat', label: '03. Comms', icon: MessageSquare },
+    { id: 'roster', label: '04. Roster', icon: Users },
+    { id: 'achievements', label: '05. Awards', icon: Trophy },
   ];
 
   if (isOwner) {
-    tabs.push({ id: 'admin', label: 'Applications', icon: UserPlus });
+    tabs.push({ id: 'admin', label: '06. Vetting', icon: UserPlus });
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-10">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button asChild variant="ghost" size="sm" className="rounded-full">
-            <Link to="/teams"><ChevronRight className="rotate-180" size={18}/></Link>
-          </Button>
-          <div>
-            <h1 className="text-4xl font-black tracking-tight uppercase italic">{team.name}</h1>
-            <div className="flex gap-2 mt-1">
-               <Badge className="bg-primary/20 text-primary border-none uppercase text-[10px] font-black">{team.sport}</Badge>
-               <Badge variant="outline" className="text-[10px] font-bold border-border/50">INVITE CODE: {team.invite_code}</Badge>
-            </div>
+    <div className="max-w-6xl mx-auto py-12 px-4 space-y-20">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-12 border-l-8 border-foreground pl-12 py-4">
+        <div className="space-y-4">
+          <div className="flex items-center gap-4">
+            <h1 className="text-6xl font-black tracking-tighter italic uppercase leading-none">{team.name}</h1>
+            <Badge variant="outline">{team.sport}</Badge>
+          </div>
+          <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-[0.3em] opacity-50 italic">
+            <span>Invite Code: {team.invite_code}</span>
+            <Separator orientation="vertical" className="h-4 w-0.5 bg-foreground" />
+            <span>ID: {String(team.id || '').split('-')[0]}</span>
           </div>
         </div>
+        <Button asChild variant="outline" className="h-16 px-8 border-2 font-black italic">
+          <Link to="/teams">Exit Sector</Link>
+        </Button>
       </div>
 
-      <div className="flex gap-2 bg-muted/40 p-2 rounded-[2rem] w-fit border border-border/50">
+      <div className="flex flex-wrap gap-1 bg-foreground border-2 border-foreground sticky top-0 z-40">
         {tabs.map(tab => (
-          <Button
+          <button
             key={tab.id}
-            variant={activeTab === tab.id ? 'default' : 'ghost'}
             className={cn(
-              "rounded-[1.5rem] gap-3 px-8 font-black text-xs uppercase tracking-widest transition-all h-12",
-              activeTab === tab.id ? "shadow-xl shadow-primary/20 bg-card text-primary" : "text-muted-foreground"
+              "flex-1 p-6 text-[10px] font-black uppercase tracking-[0.3em] transition-colors",
+              activeTab === tab.id ? "bg-background text-foreground" : "bg-foreground text-background hover:bg-muted/10"
             )}
             onClick={() => setActiveTab(tab.id)}
           >
-            <tab.icon size={16} />
             {tab.label}
-          </Button>
+          </button>
         ))}
       </div>
 
-      <div className="mt-8">
+      <div className="mt-12">
         {activeTab === 'overview' && (
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <Card className="md:col-span-2 rounded-[3rem] border-none shadow-xl bg-card/60 backdrop-blur-sm">
-                 <CardHeader className="p-10 pb-0">
-                    <CardTitle className="text-2xl font-black uppercase tracking-tighter italic">About Squad</CardTitle>
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-1 bg-foreground border-2 border-foreground">
+              <Card className="md:col-span-2 border-none p-12 bg-background rounded-none">
+                 <CardHeader className="p-0 mb-8 border-none">
+                    <CardTitle>Operational Intel</CardTitle>
                  </CardHeader>
-                 <CardContent className="p-10 pt-6">
-                    <p className="text-muted-foreground font-bold text-lg leading-relaxed">{team.description || 'No description provided. This squad focuses on performance over paperwork.'}</p>
+                 <CardContent className="p-0">
+                    <p className="text-xl font-bold uppercase italic leading-tight opacity-70">
+                      {team.description || 'No operational brief available for this unit.'}
+                    </p>
                  </CardContent>
               </Card>
-              <Card className="rounded-[3rem] border-none shadow-xl bg-card">
-                 <CardHeader className="p-8 pb-4">
-                    <CardTitle className="text-lg font-black uppercase tracking-widest flex items-center gap-3"><Briefcase size={18} className="text-primary"/> Staff Unit</CardTitle>
+              <Card className="border-none p-12 bg-background rounded-none">
+                 <CardHeader className="p-0 mb-8 border-none">
+                    <CardTitle className="text-xl">Command Staff</CardTitle>
                  </CardHeader>
-                 <CardContent className="p-8 pt-0 space-y-4">
+                 <CardContent className="p-0 space-y-1 bg-foreground border-2 border-foreground">
                     {team.members?.filter(m => m.role !== 'member').map(m => (
-                      <div key={m.id} className="flex justify-between items-center bg-muted/20 p-5 rounded-[1.5rem] border border-border/40">
-                         <span className="font-black text-sm uppercase">{m.username}</span>
-                         <Badge variant="secondary" className="uppercase text-[9px] font-black bg-primary/10 text-primary">{m.role}</Badge>
+                      <div key={m.id} className="flex justify-between items-center bg-background p-6">
+                         <span className="font-black italic uppercase text-lg">{m.username}</span>
+                         <Badge>{m.role}</Badge>
                       </div>
                     ))}
                  </CardContent>
@@ -307,67 +312,54 @@ const TeamDashboardPage = () => {
         )}
 
         {activeTab === 'news' && (
-           <div className="max-w-3xl mx-auto space-y-12">
+           <div className="max-w-3xl mx-auto space-y-24">
               {isOwner && (
-                <Card className="bg-primary/5 border-primary/20 rounded-[2.5rem] shadow-2xl">
-                   <CardHeader className="p-8 pb-0">
-                      <CardTitle className="text-sm font-black uppercase tracking-[0.3em] text-primary">Global Squad Broadcast</CardTitle>
-                   </CardHeader>
-                   <CardContent className="p-8 space-y-6">
-                      <textarea 
-                        className="w-full min-h-[120px] p-8 bg-background border-none rounded-[2rem] outline-none focus:ring-2 focus:ring-primary shadow-inner font-medium text-base italic" 
-                        placeholder="What's the plan, Captain?"
-                        value={newPost}
-                        onChange={(e) => setNewPost(e.target.value)}
-                      />
-                      <div className="flex justify-end">
-                         <Button onClick={handleCreatePost} className="font-black rounded-[1.5rem] px-12 h-14 text-lg shadow-xl shadow-primary/30 transform hover:-translate-y-1 transition-all">Broadcast</Button>
-                      </div>
-                   </CardContent>
-                </Card>
+                <div className="space-y-8">
+                   <h2 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-40">New Broadcast</h2>
+                   <textarea 
+                    className="w-full min-h-[150px] p-8 border-2 border-foreground font-bold uppercase italic outline-none" 
+                    placeholder="Operational Update..."
+                    value={newPost}
+                    onChange={(e) => setNewPost(e.target.value)}
+                  />
+                  <Button onClick={handleCreatePost} className="w-full h-20 text-xl italic uppercase">Push Transmission</Button>
+                </div>
               )}
               
-              <div className="space-y-8">
+              <div className="space-y-24">
                  {posts.map(post => (
-                   <div key={post.id} className="relative group pl-8">
-                      <div className="absolute left-0 top-0 w-1 h-full bg-primary/10 rounded-full group-hover:bg-primary transition-colors" />
-                      <div className="space-y-4">
-                        <p className="font-bold text-xl leading-relaxed italic text-foreground">"{post.content}"</p>
-                        <div className="flex items-center gap-4 text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">
-                           <div className="flex items-center gap-1.5"><Clock size={12}/> {new Date(post.created_at).toLocaleDateString()}</div>
-                           <Separator orientation="vertical" className="h-3" />
-                           <div className="text-primary opacity-60">Verified Origin</div>
-                        </div>
+                   <div key={post.id} className="border-l-8 border-foreground pl-12 space-y-4">
+                      <p className="text-2xl font-black italic uppercase leading-none">"{post.content}"</p>
+                      <div className="flex items-center gap-6 text-[9px] font-black opacity-30 uppercase tracking-[0.3em]">
+                         <span><Clock size={12} className="inline mr-2"/> {new Date(post.created_at).toLocaleDateString()}</span>
+                         <span>Origin_Verified</span>
                       </div>
                    </div>
                  ))}
                  {posts.length === 0 && (
-                    <div className="py-40 text-center opacity-20 font-black text-4xl uppercase tracking-tighter italic">No Broadcasts</div>
+                    <div className="py-48 text-center opacity-10 font-black text-6xl uppercase italic">Zero Comms</div>
                  )}
               </div>
            </div>
         )}
 
         {activeTab === 'chat' && (
-           <Card className="max-w-4xl mx-auto h-[700px] flex flex-col rounded-[3.5rem] border-none shadow-2xl overflow-hidden bg-card/40 backdrop-blur-md">
-              <CardHeader className="p-10 border-b bg-card">
-                 <CardTitle className="flex items-center gap-4 text-2xl font-black italic uppercase tracking-tighter">
-                   <div className="w-2 h-8 bg-primary rounded-full shadow-lg shadow-primary/20" />
-                   Secure Squad Channel
-                 </CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 overflow-y-auto p-10 space-y-8 bg-muted/5">
+           <Card className="max-w-4xl mx-auto flex flex-col border-4 border-foreground rounded-none shadow-none bg-background">
+              <div className="p-8 border-b-4 border-foreground">
+                 <h2 className="text-3xl font-black italic uppercase tracking-tighter">Secure Comms</h2>
+              </div>
+              <div className="h-[500px] overflow-y-auto p-10 space-y-8">
                  {chatMessages.map((msg, i) => {
                    const isMe = msg.user_id === currentUser?.user_id;
                    return (
                      <div key={i} className={cn("flex flex-col gap-2", isMe ? "items-end" : "items-start")}>
-                        <div className="flex items-baseline gap-3">
-                           {!isMe && <span className="text-[10px] font-black text-primary uppercase tracking-widest italic">{msg.username}</span>}
-                           <span className="text-[9px] text-muted-foreground font-black uppercase">{new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        <div className="flex items-baseline gap-4 opacity-30">
+                           {!isMe && <span className="text-[10px] font-black uppercase tracking-widest">{msg.username}</span>}
+                           <span className="text-[8px] font-black">{new Date(msg.created_at).toLocaleTimeString()}</span>
                         </div>
                         <div className={cn(
-                          "max-w-[85%] p-5 rounded-[2rem] font-bold text-sm shadow-sm transition-all",
-                          isMe ? "bg-primary text-primary-foreground rounded-tr-none shadow-xl shadow-primary/10" : "bg-card text-foreground rounded-tl-none border border-border/50"
+                          "max-w-[80%] p-6 font-bold uppercase italic text-sm border-2 border-foreground",
+                          isMe ? "bg-foreground text-background" : "bg-background"
                         )}>
                           {msg.content}
                         </div>
@@ -375,86 +367,73 @@ const TeamDashboardPage = () => {
                    );
                  })}
                  <div ref={chatEndRef} />
-              </CardContent>
-              <CardFooter className="p-8 border-t bg-card">
-                 <form onSubmit={handleSendMessage} className="flex gap-4 w-full">
+              </div>
+              <div className="p-8 border-t-4 border-foreground">
+                 <form onSubmit={handleSendMessage} className="flex gap-1 bg-foreground border-2 border-foreground">
                     <Input 
-                      placeholder="Enter transmission data..." 
-                      className="rounded-[1.5rem] h-16 bg-muted/40 border-none font-black px-8 text-lg"
+                      placeholder="Input Transmission..." 
+                      className="flex-1 h-20 border-none text-xl italic font-black uppercase placeholder:opacity-10"
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                     />
-                    <Button size="icon" type="submit" className="h-16 w-16 rounded-[1.5rem] shadow-2xl shadow-primary/30 transform active:scale-95 transition-all"><Send size={24}/></Button>
+                    <Button size="icon" type="submit" className="h-20 w-20 border-l-2 border-foreground"><Send size={24}/></Button>
                  </form>
-              </CardFooter>
+              </div>
            </Card>
         )}
 
         {activeTab === 'roster' && (
-           <div className="max-w-5xl mx-auto">
-              <Card className="rounded-[3rem] overflow-hidden border-none shadow-2xl bg-card">
-                 <Table>
-                    <TableHeader>
-                       <TableRow className="bg-muted/40 border-none">
-                          <TableHead className="pl-12 h-20 uppercase font-black text-[11px] tracking-[0.2em]">Combatant Profile</TableHead>
-                          <TableHead className="h-20 uppercase font-black text-[11px] tracking-[0.2em]">Squad Role</TableHead>
-                          <TableHead className="h-20 uppercase font-black text-[11px] tracking-[0.2em]">Enlisted</TableHead>
-                          <TableHead className="text-right pr-12 h-20 uppercase font-black text-[11px] tracking-[0.2em]">Actions</TableHead>
-                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                       {team.members?.map(m => (
-                         <TableRow key={m.id} className="h-24 border-border/20 hover:bg-muted/10 transition-colors">
-                            <TableCell className="pl-12">
-                               <Link to={`/player/${m.username}`} className="font-black text-xl hover:text-primary transition-all tracking-tighter uppercase">{m.username}</Link>
-                            </TableCell>
-                            <TableCell><Badge variant="secondary" className="font-black text-[10px] uppercase tracking-widest bg-muted/50 px-3">{m.role}</Badge></TableCell>
-                            <TableCell className="text-muted-foreground font-black text-[10px] uppercase tracking-widest">{new Date(m.joined_at).toLocaleDateString()}</TableCell>
-                            <TableCell className="text-right pr-12">
-                               {isOwner && m.user_id !== team.owner_id && (
-                                 <Button 
-                                   variant="ghost" 
-                                   size="icon" 
-                                   onClick={() => handleRemoveMember(m.user_id)}
-                                   className="w-12 h-12 text-destructive hover:bg-destructive/10 rounded-2xl"
-                                  >
-                                    <Trash2 size={20}/>
-                                  </Button>
-                               )}
-                            </TableCell>
-                         </TableRow>
-                       ))}
-                    </TableBody>
-                 </Table>
-              </Card>
+           <div className="max-w-5xl mx-auto bg-foreground border-2 border-foreground">
+              <Table>
+                 <TableHeader>
+                    <TableRow className="h-16">
+                       <TableHead>Combatant</TableHead>
+                       <TableHead>Role</TableHead>
+                       <TableHead>Enlistment</TableHead>
+                       <TableHead className="text-right">Command</TableHead>
+                    </TableRow>
+                 </TableHeader>
+                 <TableBody>
+                    {team.members?.map(m => (
+                      <TableRow key={m.id} className="h-24 bg-background border-b-2 border-foreground last:border-b-0">
+                         <TableCell>
+                            <Link to={`/player/${m.username}`} className="font-black text-2xl italic tracking-tighter uppercase">{m.username}</Link>
+                         </TableCell>
+                         <TableCell><Badge>{m.role}</Badge></TableCell>
+                         <TableCell className="opacity-40 text-[10px] font-black">{new Date(m.joined_at).toLocaleDateString()}</TableCell>
+                         <TableCell className="text-right">
+                            {isOwner && m.user_id !== team.owner_id && (
+                              <Button variant="outline" className="h-14 w-14 border-2 text-destructive" onClick={() => handleRemoveMember(m.user_id)}>
+                                 <Trash2 size={20}/>
+                              </Button>
+                            )}
+                         </TableCell>
+                      </TableRow>
+                    ))}
+                 </TableBody>
+              </Table>
            </div>
         )}
 
         {activeTab === 'admin' && isOwner && (
-           <div className="max-w-2xl mx-auto space-y-12">
-              <header className="text-center">
-                 <h2 className="text-4xl font-black tracking-tighter uppercase italic mb-3">Recruitment Center</h2>
-                 <p className="text-muted-foreground font-bold text-sm tracking-widest uppercase">Personnel Vetting & Approval</p>
-              </header>
-              <div className="space-y-6">
+           <div className="max-w-3xl mx-auto space-y-16">
+              <h2 className="text-5xl font-black uppercase italic tracking-tighter border-b-8 border-foreground pb-4">Vetting Phase</h2>
+              <div className="grid grid-cols-1 gap-1 bg-foreground border-2 border-foreground">
                  {apps.map(app => (
-                   <Card key={app.id} className="rounded-[2.5rem] border-none shadow-xl bg-card group">
-                      <CardContent className="p-8 flex justify-between items-center">
-                         <div className="space-y-2">
-                            <p className="font-black text-2xl tracking-tighter uppercase">{app.username}</p>
-                            <p className="text-sm text-muted-foreground italic font-bold">"{app.message}"</p>
-                         </div>
-                         <div className="flex gap-3">
-                            <Button size="lg" onClick={() => handleApp(app.id, 'approved')} className="bg-green-600 hover:bg-green-700 font-black rounded-2xl px-8 h-14 shadow-lg shadow-green-600/20">ACCEPT</Button>
-                            <Button size="lg" variant="ghost" onClick={() => handleApp(app.id, 'rejected')} className="text-red-500 hover:bg-red-50 font-black rounded-2xl px-8 h-14">REJECT</Button>
-                         </div>
-                      </CardContent>
-                   </Card>
+                   <div key={app.id} className="bg-background p-12 flex justify-between items-center group">
+                      <div className="space-y-4">
+                         <p className="font-black text-4xl italic tracking-tighter uppercase leading-none">{app.username}</p>
+                         <p className="text-lg font-bold italic uppercase opacity-50 leading-tight">"{app.message}"</p>
+                      </div>
+                      <div className="flex gap-4">
+                         <Button onClick={() => handleApp(app.id, 'approved')} className="h-16 px-10 text-lg italic uppercase">Verify</Button>
+                         <Button variant="outline" onClick={() => handleApp(app.id, 'rejected')} className="h-16 px-10 text-lg italic uppercase border-2">Reject</Button>
+                      </div>
+                   </div>
                  ))}
                  {apps.length === 0 && (
-                   <div className="py-32 text-center space-y-6 bg-muted/10 rounded-[4rem] border-2 border-dashed border-border/50">
-                      <Users size={48} className="mx-auto text-muted-foreground/10" />
-                      <p className="text-muted-foreground font-black uppercase text-xs tracking-[0.4em]">No active enlistment files</p>
+                   <div className="py-48 text-center bg-background">
+                      <p className="text-3xl font-black uppercase opacity-10 italic">No Active Vetting Files</p>
                    </div>
                  )}
               </div>
@@ -462,77 +441,47 @@ const TeamDashboardPage = () => {
         )}
 
         {activeTab === 'achievements' && (
-           <div className="max-w-5xl mx-auto py-10 space-y-10">
-              <div className="flex justify-between items-center px-4">
-                 <h2 className="text-3xl font-black uppercase tracking-tighter italic">Squad Achievements</h2>
+           <div className="max-w-6xl mx-auto space-y-16">
+              <div className="flex justify-between items-end border-b-8 border-foreground pb-6">
+                 <h2 className="text-5xl font-black uppercase italic tracking-tighter leading-none">Squad Trophies</h2>
                  {isOwner && (
-                    <Dialog open={awardModalOpen} onOpenChange={setAwardModalOpen}>
-                       <DialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="rounded-xl font-black gap-2">
-                             <Plus size={16}/> ADD AWARD
-                          </Button>
-                       </DialogTrigger>
-                       <DialogContent className="rounded-[2.5rem] border-none shadow-2xl p-0 overflow-hidden">
-                          <DialogHeader className="bg-yellow-500 p-10 text-white">
-                             <DialogTitle className="text-3xl font-black uppercase italic tracking-tighter">New Trophy</DialogTitle>
-                             <DialogDescription className="text-white/70 font-bold uppercase text-[10px] tracking-widest mt-2">Log a new squad milestone</DialogDescription>
-                          </DialogHeader>
-                          <form onSubmit={handleAddAward} className="p-10 space-y-6">
-                             <div className="space-y-2">
-                                <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground">Trophy Title</Label>
-                                <Input 
-                                   placeholder="E.g. Regional Champion, League Winner" 
-                                   className="h-14 rounded-2xl font-black text-lg" 
-                                   value={newAward.title}
-                                   onChange={e => setNewAward({...newAward, title: e.target.value})}
-                                   required 
-                                />
-                             </div>
-                             <div className="space-y-2">
-                                <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground">Context / Competition</Label>
-                                <Input 
-                                   placeholder="E.g. Pro Cup 2026" 
-                                   className="h-14 rounded-2xl font-black text-lg" 
-                                   value={newAward.description}
-                                   onChange={e => setNewAward({...newAward, description: e.target.value})}
-                                   required 
-                                />
-                             </div>
-                             <DialogFooter>
-                                <Button type="submit" className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-yellow-500/20 mt-4 bg-yellow-500 hover:bg-yellow-600">ENSHRINE TROPHY</Button>
-                             </DialogFooter>
-                          </form>
-                       </DialogContent>
-                    </Dialog>
+                    <Button variant="outline" className="border-2 font-black italic" onClick={() => setAwardModalOpen(true)}>ADD_AWARD</Button>
                  )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1 bg-foreground border-2 border-foreground">
                  {team.awards?.map(award => (
-                   <Card key={award.id} className="text-center py-16 relative overflow-hidden group rounded-[3rem] border-none shadow-2xl bg-card">
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 -mr-16 -mt-16 rounded-full group-hover:scale-150 transition-all duration-700" />
-                      <div className="w-20 h-20 bg-yellow-500/10 text-yellow-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner transition-transform group-hover:scale-110">
-                         <Trophy size={40} />
-                      </div>
-                      <CardTitle className="text-2xl font-black uppercase tracking-tighter italic">{award.title}</CardTitle>
-                      <CardDescription className="mt-3 font-black text-primary text-sm tracking-[0.2em] uppercase">{award.description}</CardDescription>
+                   <Card key={award.id} className="text-center p-12 bg-background border-none rounded-none group relative h-80 flex flex-col items-center justify-center">
+                      <Trophy size={60} strokeWidth={1} className="mb-8 opacity-20" />
+                      <h3 className="text-3xl font-black uppercase italic tracking-tighter leading-none">{award.title}</h3>
+                      <p className="mt-4 text-[10px] font-black uppercase tracking-[0.3em] opacity-40">{award.description}</p>
                       {isOwner && (
                          <Button 
                             variant="ghost" 
                             size="icon" 
                             onClick={() => handleDeleteAward(award.id)}
-                            className="absolute top-6 right-6 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute top-8 right-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                          >
-                            <Trash2 size={16}/>
+                            <Trash2 size={20}/>
                          </Button>
                       )}
                    </Card>
                  ))}
                  {(!team.awards || team.awards.length === 0) && (
-                    <div className="col-span-full py-40 text-center bg-muted/10 rounded-[4rem] border-2 border-dashed">
-                       <p className="text-muted-foreground font-black uppercase text-xs tracking-widest italic">No squad achievements recorded</p>
+                    <div className="col-span-full py-48 text-center bg-background">
+                       <p className="text-3xl font-black uppercase opacity-10 italic">Zero Achievements Logged</p>
                     </div>
                  )}
               </div>
+              <Dialog open={awardModalOpen} onOpenChange={setAwardModalOpen}>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Enshrine Achievement</DialogTitle></DialogHeader>
+                  <form onSubmit={handleAddAward} className="space-y-8 py-6">
+                    <Input placeholder="Trophy Designation" className="h-16 italic font-black uppercase" value={newAward.title} onChange={e => setNewAward({...newAward, title: e.target.value})} required />
+                    <Input placeholder="Operational Context" className="h-16 italic font-black uppercase" value={newAward.description} onChange={e => setNewAward({...newAward, description: e.target.value})} required />
+                    <Button type="submit" className="w-full h-20 text-xl italic uppercase">Confirm Award</Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
            </div>
         )}
       </div>
