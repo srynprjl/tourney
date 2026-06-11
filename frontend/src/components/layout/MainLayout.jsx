@@ -7,7 +7,7 @@ const MainLayout = ({ children }) => {
   const location = useLocation();
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center font-black text-muted-foreground animate-pulse">CONNECTING TO TOURNEYPRO CLOUD...</div>;
+    return <div className="min-h-screen flex items-center justify-center font-bold tracking-tighter text-2xl animate-pulse uppercase">TourneyPro</div>;
   }
 
   const isAuthPage = ['/login', '/register'].includes(location.pathname);
@@ -22,9 +22,9 @@ const MainLayout = ({ children }) => {
   }
 
   return (
-    <div className="flex min-h-screen bg-background transition-colors duration-300">
+    <div className="flex min-h-screen bg-background">
       <Sidebar />
-      <main className="flex-1 transition-all duration-300 p-8 ml-64">
+      <main className="flex-1 p-8 ml-64 max-w-7xl mx-auto">
         {children}
       </main>
     </div>

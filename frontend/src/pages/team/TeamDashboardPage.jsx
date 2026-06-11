@@ -168,8 +168,8 @@ const TeamDashboardPage = () => {
   };
 
   if (!team) return (
-    <div className="p-24 text-center font-black uppercase tracking-[0.5em] animate-pulse">
-      Connecting to Squad Intelligence Hub...
+    <div className="min-h-[400px] flex items-center justify-center font-medium text-muted-foreground animate-pulse">
+      Connecting to Squad HUD...
     </div>
   );
 
@@ -179,37 +179,39 @@ const TeamDashboardPage = () => {
 
   if (!isMember && !isOwner) {
     return (
-      <div className="max-w-4xl mx-auto py-24 px-4 space-y-20">
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-12 border-l-8 border-foreground pl-12 py-4">
-          <div className="space-y-4">
-            <Badge variant="outline">Sector: Enlistment Required</Badge>
-            <h1 className="text-7xl font-black tracking-tighter italic uppercase leading-none">{team.name}</h1>
-            <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-50 italic">Operational Clearance Necessary</p>
+      <div className="max-w-4xl mx-auto py-12 px-4 space-y-10">
+        <header className="space-y-3">
+          <div className="flex items-center gap-3">
+            <h1 className="text-4xl font-bold tracking-tight">{team.name}</h1>
+            <Badge variant="secondary" className="capitalize">{team.sport}</Badge>
           </div>
+          <p className="text-muted-foreground font-medium">Restricted access. Enlistment required to view operational data.</p>
         </header>
         
-        <div className="border-4 border-foreground p-12 bg-background space-y-12">
+        <Card className="p-8 border-none shadow-xl bg-card">
           {myApp ? (
-            <div className="text-center py-20 space-y-8">
-              <ShieldCheck size={80} strokeWidth={1} className="mx-auto" />
-              <div className="space-y-2">
-                 <h2 className="text-4xl font-black uppercase italic tracking-tighter">Application Logged</h2>
-                 <p className="text-sm font-bold uppercase opacity-60">Vetting process in progress. Awaiting command decision.</p>
+            <div className="text-center py-12 space-y-6">
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary mx-auto">
+                <ShieldCheck size={32} />
               </div>
-              <Button asChild variant="outline" className="border-2 font-black italic">
+              <div className="space-y-1">
+                 <h2 className="text-2xl font-bold tracking-tight">Application Transmitted</h2>
+                 <p className="text-sm text-muted-foreground">Vetting process in progress. Awaiting command decision.</p>
+              </div>
+              <Button asChild variant="outline">
                  <Link to="/teams">Return to Registry</Link>
               </Button>
             </div>
           ) : (
-            <>
-              <div className="space-y-4">
-                <h2 className="text-3xl font-black uppercase italic tracking-tighter">Request Enlistment</h2>
-                <p className="text-sm font-bold uppercase opacity-60">Submit operational intent for vetting.</p>
+            <div className="space-y-8">
+              <div className="space-y-1">
+                <h2 className="text-2xl font-bold tracking-tight">Request Enlistment</h2>
+                <p className="text-sm text-muted-foreground">Submit your operational intent for command vetting.</p>
               </div>
               
-              <div className="space-y-8">
+              <div className="space-y-6">
                 <textarea 
-                  className="w-full min-h-[200px] p-8 border-2 border-foreground outline-none font-bold uppercase italic tracking-tight"
+                  className="w-full min-h-[150px] p-4 rounded-xl border bg-background text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20"
                   placeholder="Operational Motivation..."
                   id="appMessage"
                 />
@@ -224,86 +226,89 @@ const TeamDashboardPage = () => {
                       alert('Transmission Failed');
                     }
                   }}
-                  className="w-full h-24 text-2xl uppercase italic"
+                  className="w-full h-12 font-semibold"
                 >
                   Transmit Enlistment File
                 </Button>
               </div>
-            </>
+            </div>
           )}
-        </div>
+        </Card>
       </div>
     );
   }
 
   const tabs = [
-    { id: 'overview', label: '01. Intel', icon: LayoutDashboard },
-    { id: 'news', label: '02. Feed', icon: Newspaper },
-    { id: 'chat', label: '03. Comms', icon: MessageSquare },
-    { id: 'roster', label: '04. Roster', icon: Users },
-    { id: 'achievements', label: '05. Awards', icon: Trophy },
+    { id: 'overview', label: 'Intel', icon: LayoutDashboard },
+    { id: 'news', label: 'Feed', icon: Newspaper },
+    { id: 'chat', label: 'Comms', icon: MessageSquare },
+    { id: 'roster', label: 'Roster', icon: Users },
+    { id: 'achievements', label: 'Awards', icon: Trophy },
   ];
 
   if (isOwner) {
-    tabs.push({ id: 'admin', label: '06. Vetting', icon: UserPlus });
+    tabs.push({ id: 'admin', label: 'Vetting', icon: UserPlus });
   }
 
   return (
-    <div className="max-w-6xl mx-auto py-12 px-4 space-y-20">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-12 border-l-8 border-foreground pl-12 py-4">
-        <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <h1 className="text-6xl font-black tracking-tighter italic uppercase leading-none">{team.name}</h1>
-            <Badge variant="outline">{team.sport}</Badge>
+    <div className="space-y-10 pb-12">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <h1 className="text-4xl font-bold tracking-tight">{team.name}</h1>
+            <Badge variant="secondary" className="capitalize">{team.sport}</Badge>
           </div>
-          <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-[0.3em] opacity-50 italic">
-            <span>Invite Code: {team.invite_code}</span>
-            <Separator orientation="vertical" className="h-4 w-0.5 bg-foreground" />
-            <span>ID: {String(team.id || '').split('-')[0]}</span>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground font-medium">
+            <span>Invite Code: <span className="font-mono text-primary">{team.invite_code}</span></span>
+            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+            <span className="font-mono text-xs opacity-70">ID: {String(team.id || '').split('-')[0]}</span>
           </div>
         </div>
-        <Button asChild variant="outline" className="h-16 px-8 border-2 font-black italic">
+        <Button asChild variant="outline">
           <Link to="/teams">Exit Sector</Link>
         </Button>
-      </div>
+      </header>
 
-      <div className="flex flex-wrap gap-1 bg-foreground border-2 border-foreground sticky top-0 z-40">
+      <div className="flex p-1 bg-muted rounded-xl w-fit overflow-x-auto max-w-full no-scrollbar sticky top-0 z-40 shadow-sm border">
         {tabs.map(tab => (
           <button
             key={tab.id}
             className={cn(
-              "flex-1 p-6 text-[10px] font-black uppercase tracking-[0.3em] transition-colors",
-              activeTab === tab.id ? "bg-background text-foreground" : "bg-foreground text-background hover:bg-muted/10"
+              "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap",
+              activeTab === tab.id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
             )}
             onClick={() => setActiveTab(tab.id)}
           >
+            <tab.icon size={16} />
             {tab.label}
           </button>
         ))}
       </div>
 
-      <div className="mt-12">
+      <div className="mt-8">
         {activeTab === 'overview' && (
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-1 bg-foreground border-2 border-foreground">
-              <Card className="md:col-span-2 border-none p-12 bg-background rounded-none">
-                 <CardHeader className="p-0 mb-8 border-none">
-                    <CardTitle>Operational Intel</CardTitle>
+           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <Card className="lg:col-span-2">
+                 <CardHeader>
+                    <CardTitle className="text-xl flex items-center gap-2">
+                       <Briefcase size={20} className="text-primary" /> Operational Intel
+                    </CardTitle>
                  </CardHeader>
-                 <CardContent className="p-0">
-                    <p className="text-xl font-bold uppercase italic leading-tight opacity-70">
+                 <CardContent>
+                    <p className="text-muted-foreground leading-relaxed">
                       {team.description || 'No operational brief available for this unit.'}
                     </p>
                  </CardContent>
               </Card>
-              <Card className="border-none p-12 bg-background rounded-none">
-                 <CardHeader className="p-0 mb-8 border-none">
-                    <CardTitle className="text-xl">Command Staff</CardTitle>
+              <Card>
+                 <CardHeader>
+                    <CardTitle className="text-lg">Command Staff</CardTitle>
                  </CardHeader>
-                 <CardContent className="p-0 space-y-1 bg-foreground border-2 border-foreground">
+                 <CardContent className="space-y-3">
                     {team.members?.filter(m => m.role !== 'member').map(m => (
-                      <div key={m.id} className="flex justify-between items-center bg-background p-6">
-                         <span className="font-black italic uppercase text-lg">{m.username}</span>
-                         <Badge>{m.role}</Badge>
+                      <div key={m.id} className="flex justify-between items-center p-3 rounded-lg bg-muted/30 border">
+                         <span className="font-semibold text-sm">{m.username}</span>
+                         <Badge variant="outline" className="text-[10px] capitalize">{m.role}</Badge>
                       </div>
                     ))}
                  </CardContent>
@@ -312,54 +317,61 @@ const TeamDashboardPage = () => {
         )}
 
         {activeTab === 'news' && (
-           <div className="max-w-3xl mx-auto space-y-24">
+           <div className="max-w-3xl mx-auto space-y-12">
               {isOwner && (
-                <div className="space-y-8">
-                   <h2 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-40">New Broadcast</h2>
-                   <textarea 
-                    className="w-full min-h-[150px] p-8 border-2 border-foreground font-bold uppercase italic outline-none" 
-                    placeholder="Operational Update..."
-                    value={newPost}
-                    onChange={(e) => setNewPost(e.target.value)}
-                  />
-                  <Button onClick={handleCreatePost} className="w-full h-20 text-xl italic uppercase">Push Transmission</Button>
-                </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Push Broadcast</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                     <textarea 
+                      className="w-full min-h-[120px] p-4 rounded-xl border bg-background text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20" 
+                      placeholder="Operational Update..."
+                      value={newPost}
+                      onChange={(e) => setNewPost(e.target.value)}
+                    />
+                    <Button onClick={handleCreatePost} className="w-full font-semibold">Post Transmission</Button>
+                  </CardContent>
+                </Card>
               )}
               
-              <div className="space-y-24">
+              <div className="space-y-10">
                  {posts.map(post => (
-                   <div key={post.id} className="border-l-8 border-foreground pl-12 space-y-4">
-                      <p className="text-2xl font-black italic uppercase leading-none">"{post.content}"</p>
-                      <div className="flex items-center gap-6 text-[9px] font-black opacity-30 uppercase tracking-[0.3em]">
-                         <span><Clock size={12} className="inline mr-2"/> {new Date(post.created_at).toLocaleDateString()}</span>
-                         <span>Origin_Verified</span>
+                   <div key={post.id} className="relative pl-8 border-l-2 border-primary/20 space-y-2">
+                      <div className="absolute -left-1.5 top-0 w-3 h-3 rounded-full bg-primary border-4 border-background" />
+                      <p className="text-base font-medium leading-relaxed">"{post.content}"</p>
+                      <div className="flex items-center gap-4 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
+                         <span className="flex items-center gap-1.5"><Clock size={12}/> {new Date(post.created_at).toLocaleDateString()}</span>
+                         <span>Origin Verified</span>
                       </div>
                    </div>
                  ))}
                  {posts.length === 0 && (
-                    <div className="py-48 text-center opacity-10 font-black text-6xl uppercase italic">Zero Comms</div>
+                    <div className="py-24 text-center opacity-30 italic text-sm">No transmissions detected.</div>
                  )}
               </div>
            </div>
         )}
 
         {activeTab === 'chat' && (
-           <Card className="max-w-4xl mx-auto flex flex-col border-4 border-foreground rounded-none shadow-none bg-background">
-              <div className="p-8 border-b-4 border-foreground">
-                 <h2 className="text-3xl font-black italic uppercase tracking-tighter">Secure Comms</h2>
-              </div>
-              <div className="h-[500px] overflow-y-auto p-10 space-y-8">
+           <Card className="max-w-4xl mx-auto flex flex-col overflow-hidden h-[600px]">
+              <CardHeader className="bg-muted/50 border-b pb-4">
+                 <CardTitle className="text-lg flex items-center gap-2">
+                    <MessageSquare size={18} className="text-primary" /> Secure Channel
+                 </CardTitle>
+              </CardHeader>
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
                  {chatMessages.map((msg, i) => {
                    const isMe = msg.user_id === currentUser?.user_id;
                    return (
-                     <div key={i} className={cn("flex flex-col gap-2", isMe ? "items-end" : "items-start")}>
-                        <div className="flex items-baseline gap-4 opacity-30">
-                           {!isMe && <span className="text-[10px] font-black uppercase tracking-widest">{msg.username}</span>}
-                           <span className="text-[8px] font-black">{new Date(msg.created_at).toLocaleTimeString()}</span>
+                     <div key={i} className={cn("flex flex-col gap-1.5", isMe ? "items-end" : "items-start")}>
+                        <div className="flex items-center gap-2 px-1">
+                           {!isMe && <span className="text-[10px] font-bold text-muted-foreground uppercase">{msg.username}</span>}
+                           <span className="text-[8px] font-medium text-muted-foreground/40">{new Date(msg.created_at).toLocaleTimeString()}</span>
                         </div>
                         <div className={cn(
-                          "max-w-[80%] p-6 font-bold uppercase italic text-sm border-2 border-foreground",
-                          isMe ? "bg-foreground text-background" : "bg-background"
+                          "max-w-[80%] p-3 text-sm font-medium rounded-2xl shadow-sm",
+                          isMe ? "bg-primary text-primary-foreground rounded-tr-none" : "bg-muted text-foreground rounded-tl-none"
                         )}>
                           {msg.content}
                         </div>
@@ -368,43 +380,43 @@ const TeamDashboardPage = () => {
                  })}
                  <div ref={chatEndRef} />
               </div>
-              <div className="p-8 border-t-4 border-foreground">
-                 <form onSubmit={handleSendMessage} className="flex gap-1 bg-foreground border-2 border-foreground">
+              <CardFooter className="p-4 border-t bg-muted/20">
+                 <form onSubmit={handleSendMessage} className="flex gap-2 w-full">
                     <Input 
                       placeholder="Input Transmission..." 
-                      className="flex-1 h-20 border-none text-xl italic font-black uppercase placeholder:opacity-10"
+                      className="flex-1 h-11 shadow-none border-muted"
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                     />
-                    <Button size="icon" type="submit" className="h-20 w-20 border-l-2 border-foreground"><Send size={24}/></Button>
+                    <Button size="icon" type="submit" className="h-11 w-11 shrink-0"><Send size={18}/></Button>
                  </form>
-              </div>
+              </CardFooter>
            </Card>
         )}
 
         {activeTab === 'roster' && (
-           <div className="max-w-5xl mx-auto bg-foreground border-2 border-foreground">
+           <Card className="max-w-4xl mx-auto overflow-hidden">
               <Table>
                  <TableHeader>
-                    <TableRow className="h-16">
+                    <TableRow>
                        <TableHead>Combatant</TableHead>
                        <TableHead>Role</TableHead>
                        <TableHead>Enlistment</TableHead>
-                       <TableHead className="text-right">Command</TableHead>
+                       <TableHead className="text-right">Action</TableHead>
                     </TableRow>
                  </TableHeader>
                  <TableBody>
                     {team.members?.map(m => (
-                      <TableRow key={m.id} className="h-24 bg-background border-b-2 border-foreground last:border-b-0">
+                      <TableRow key={m.id}>
                          <TableCell>
-                            <Link to={`/player/${m.username}`} className="font-black text-2xl italic tracking-tighter uppercase">{m.username}</Link>
+                            <Link to={`/player/${m.username}`} className="font-semibold text-primary hover:underline">{m.username}</Link>
                          </TableCell>
-                         <TableCell><Badge>{m.role}</Badge></TableCell>
-                         <TableCell className="opacity-40 text-[10px] font-black">{new Date(m.joined_at).toLocaleDateString()}</TableCell>
+                         <TableCell><Badge variant="outline" className="capitalize text-[10px]">{m.role}</Badge></TableCell>
+                         <TableCell className="text-xs text-muted-foreground">{new Date(m.joined_at).toLocaleDateString()}</TableCell>
                          <TableCell className="text-right">
                             {isOwner && m.user_id !== team.owner_id && (
-                              <Button variant="outline" className="h-14 w-14 border-2 text-destructive" onClick={() => handleRemoveMember(m.user_id)}>
-                                 <Trash2 size={20}/>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleRemoveMember(m.user_id)}>
+                                 <Trash2 size={16}/>
                               </Button>
                             )}
                          </TableCell>
@@ -412,28 +424,28 @@ const TeamDashboardPage = () => {
                     ))}
                  </TableBody>
               </Table>
-           </div>
+           </Card>
         )}
 
         {activeTab === 'admin' && isOwner && (
-           <div className="max-w-3xl mx-auto space-y-16">
-              <h2 className="text-5xl font-black uppercase italic tracking-tighter border-b-8 border-foreground pb-4">Vetting Phase</h2>
-              <div className="grid grid-cols-1 gap-1 bg-foreground border-2 border-foreground">
+           <div className="max-w-3xl mx-auto space-y-8">
+              <h2 className="text-2xl font-bold tracking-tight border-b pb-4">Vetting Phase</h2>
+              <div className="grid grid-cols-1 gap-4">
                  {apps.map(app => (
-                   <div key={app.id} className="bg-background p-12 flex justify-between items-center group">
-                      <div className="space-y-4">
-                         <p className="font-black text-4xl italic tracking-tighter uppercase leading-none">{app.username}</p>
-                         <p className="text-lg font-bold italic uppercase opacity-50 leading-tight">"{app.message}"</p>
+                   <Card key={app.id} className="p-6 group flex justify-between items-center">
+                      <div className="space-y-2">
+                         <p className="font-bold text-xl">{app.username}</p>
+                         <p className="text-sm text-muted-foreground italic leading-relaxed">"{app.message}"</p>
                       </div>
-                      <div className="flex gap-4">
-                         <Button onClick={() => handleApp(app.id, 'approved')} className="h-16 px-10 text-lg italic uppercase">Verify</Button>
-                         <Button variant="outline" onClick={() => handleApp(app.id, 'rejected')} className="h-16 px-10 text-lg italic uppercase border-2">Reject</Button>
+                      <div className="flex gap-2">
+                         <Button onClick={() => handleApp(app.id, 'approved')} size="sm">Verify</Button>
+                         <Button variant="outline" onClick={() => handleApp(app.id, 'rejected')} size="sm">Reject</Button>
                       </div>
-                   </div>
+                   </Card>
                  ))}
                  {apps.length === 0 && (
-                   <div className="py-48 text-center bg-background">
-                      <p className="text-3xl font-black uppercase opacity-10 italic">No Active Vetting Files</p>
+                   <div className="py-24 text-center border-2 border-dashed rounded-2xl bg-muted/20">
+                      <p className="text-sm text-muted-foreground italic">No active vetting files.</p>
                    </div>
                  )}
               </div>
@@ -441,44 +453,56 @@ const TeamDashboardPage = () => {
         )}
 
         {activeTab === 'achievements' && (
-           <div className="max-w-6xl mx-auto space-y-16">
-              <div className="flex justify-between items-end border-b-8 border-foreground pb-6">
-                 <h2 className="text-5xl font-black uppercase italic tracking-tighter leading-none">Squad Trophies</h2>
+           <div className="space-y-8">
+              <div className="flex items-center justify-between border-b pb-4">
+                 <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                    <Trophy size={22} className="text-primary" /> Squad Trophies
+                 </h2>
                  {isOwner && (
-                    <Button variant="outline" className="border-2 font-black italic" onClick={() => setAwardModalOpen(true)}>ADD_AWARD</Button>
+                    <Button variant="outline" size="sm" onClick={() => setAwardModalOpen(true)}>Add Award</Button>
                  )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1 bg-foreground border-2 border-foreground">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                  {team.awards?.map(award => (
-                   <Card key={award.id} className="text-center p-12 bg-background border-none rounded-none group relative h-80 flex flex-col items-center justify-center">
-                      <Trophy size={60} strokeWidth={1} className="mb-8 opacity-20" />
-                      <h3 className="text-3xl font-black uppercase italic tracking-tighter leading-none">{award.title}</h3>
-                      <p className="mt-4 text-[10px] font-black uppercase tracking-[0.3em] opacity-40">{award.description}</p>
+                   <Card key={award.id} className="p-8 group relative flex flex-col items-center text-center">
+                      <div className="w-16 h-16 rounded-full bg-primary/5 flex items-center justify-center text-primary/40 mb-6 group-hover:scale-110 transition-transform">
+                        <Trophy size={32} strokeWidth={1.5} />
+                      </div>
+                      <h3 className="text-lg font-bold tracking-tight mb-2">{award.title}</h3>
+                      <p className="text-xs text-muted-foreground font-medium leading-relaxed">{award.description}</p>
                       {isOwner && (
                          <Button 
                             variant="ghost" 
                             size="icon" 
                             onClick={() => handleDeleteAward(award.id)}
-                            className="absolute top-8 right-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute top-4 right-4 h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                          >
-                            <Trash2 size={20}/>
+                            <Trash2 size={16}/>
                          </Button>
                       )}
                    </Card>
                  ))}
                  {(!team.awards || team.awards.length === 0) && (
-                    <div className="col-span-full py-48 text-center bg-background">
-                       <p className="text-3xl font-black uppercase opacity-10 italic">Zero Achievements Logged</p>
+                    <div className="col-span-full py-24 text-center border-2 border-dashed rounded-2xl bg-muted/20">
+                       <p className="text-sm text-muted-foreground italic">Zero achievements logged.</p>
                     </div>
                  )}
               </div>
               <Dialog open={awardModalOpen} onOpenChange={setAwardModalOpen}>
-                <DialogContent>
+                <DialogContent className="max-w-md">
                   <DialogHeader><DialogTitle>Enshrine Achievement</DialogTitle></DialogHeader>
-                  <form onSubmit={handleAddAward} className="space-y-8 py-6">
-                    <Input placeholder="Trophy Designation" className="h-16 italic font-black uppercase" value={newAward.title} onChange={e => setNewAward({...newAward, title: e.target.value})} required />
-                    <Input placeholder="Operational Context" className="h-16 italic font-black uppercase" value={newAward.description} onChange={e => setNewAward({...newAward, description: e.target.value})} required />
-                    <Button type="submit" className="w-full h-20 text-xl italic uppercase">Confirm Award</Button>
+                  <form onSubmit={handleAddAward} className="space-y-6 pt-4">
+                    <div className="space-y-2">
+                       <Label>Trophy Name</Label>
+                       <Input placeholder="e.g. Major Championship Winner" value={newAward.title} onChange={e => setNewAward({...newAward, title: e.target.value})} required />
+                    </div>
+                    <div className="space-y-2">
+                       <Label>Context</Label>
+                       <Input placeholder="e.g. Won the Summer 2026 Finals" value={newAward.description} onChange={e => setNewAward({...newAward, description: e.target.value})} required />
+                    </div>
+                    <DialogFooter>
+                       <Button type="submit" className="w-full">Confirm Award</Button>
+                    </DialogFooter>
                   </form>
                 </DialogContent>
               </Dialog>

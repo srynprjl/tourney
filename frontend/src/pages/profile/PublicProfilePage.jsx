@@ -182,145 +182,128 @@ const PublicProfilePage = () => {
 
   if (loading)
     return (
-      <div className="p-12 text-center font-black animate-pulse text-muted-foreground uppercase tracking-widest">
-        DECRYPTING PLAYER IDENTITY...
+      <div className="min-h-[400px] flex items-center justify-center font-bold tracking-tighter text-2xl animate-pulse uppercase">
+        Decrypting Identity...
       </div>
     );
   if (!profile)
     return (
-      <div className="p-12 text-center font-black text-red-500 uppercase">
-        Player Not Found
+      <div className="p-12 text-center font-black text-red-600 uppercase tracking-widest">
+        Identity Not Found
       </div>
     );
 
   const isOwnProfile = currentUser?.username === username;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-12 pb-24">
+    <div className="space-y-12 pb-20">
       {/* Profile Header */}
-      <header className="relative">
-        <div className="h-48 bg-gradient-to-r from-primary/20 via-blue-600/10 to-transparent rounded-[3rem] border border-primary/10" />
-        <div className="absolute -bottom-16 left-12 flex items-end gap-8">
-          <div className="w-40 h-40 bg-card rounded-[2.5rem] p-2 border-4 border-background shadow-2xl overflow-hidden">
-            <div className="w-full h-full bg-muted rounded-[2rem] flex items-center justify-center">
-              <User size={64} className="text-muted-foreground/30" />
-            </div>
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 pb-10 border-b">
+        <div className="flex items-start gap-8">
+          <div className="w-32 h-32 border-2 border-primary flex items-center justify-center shrink-0">
+             <User size={48} strokeWidth={2.5} />
           </div>
-          <div className="pb-4 space-y-2">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-primary" />
+              <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Operator Identity</span>
+            </div>
             <div className="flex items-center gap-4">
-              <h1 className="text-5xl font-black tracking-tighter dark:text-white uppercase">
+              <h1 className="text-6xl font-bold tracking-tighter uppercase leading-none">
                 {profile.username}
               </h1>
               {isOwnProfile && (
                 <Button
                   onClick={() => setIsEditing(!isEditing)}
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-full w-12 h-12 bg-card shadow-lg"
+                  variant="outline"
+                  size="sm"
+                  className="w-10 h-10 p-0 border rounded-none"
                 >
-                  {isEditing ? <X size={20} /> : <Edit3 size={20} />}
+                  {isEditing ? <X size={14} /> : <Edit3 size={14} />}
                 </Button>
               )}
             </div>
-            <div className="flex gap-4 items-center text-muted-foreground font-bold">
+            <div className="flex gap-6 items-center text-[10px] font-bold uppercase tracking-[0.2em]">
               {isEditing ? (
                 <Input
                   value={editData.location}
                   onChange={(e) =>
                     setEditData({ ...editData, location: e.target.value })
                   }
-                  placeholder="Location"
-                  className="h-8 w-40 rounded-full font-bold"
+                  placeholder="LOCATION"
+                  className="h-8 w-40 rounded-none border-x-0 border-t-0 border-b px-0 focus-visible:ring-0 uppercase font-bold"
                 />
               ) : (
-                <span className="flex items-center gap-1.5">
-                  <Globe size={16} /> {profile.location || "Global"}
-                </span>
+                <span className="opacity-60">{profile.location || "GLOBAL"}</span>
               )}
-              <Separator orientation="vertical" className="h-4" />
-              <span className="text-primary font-black uppercase text-xs tracking-widest">
-                Professional Competitor
-              </span>
+              <span className="opacity-20">//</span>
+              <span className="text-primary opacity-100">PRO COMPETITOR</span>
             </div>
           </div>
         </div>
+        {isEditing && (
+          <Button
+            size="lg"
+            onClick={handleSave}
+            className="px-10 font-black uppercase tracking-widest text-[10px] h-12"
+          >
+            Save Changes
+          </Button>
+        )}
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 mt-24">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
         {/* Sidebar Stats */}
-        <div className="lg:col-span-4 space-y-8">
-          <Card className="rounded-[2.5rem] shadow-xl border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-xl font-black uppercase tracking-tight">
-                Biography
-              </CardTitle>
-              {isEditing && (
-                <Button
-                  size="sm"
-                  onClick={handleSave}
-                  className="rounded-full gap-2"
-                >
-                  <Save size={14} /> SAVE
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent>
+        <div className="lg:col-span-4 space-y-12">
+          <section className="space-y-6">
+            <h2 className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 border-b pb-4">Biography</h2>
+            <div className="p-0">
               {isEditing ? (
                 <textarea
-                  className="w-full min-h-[150px] p-4 bg-muted/30 rounded-2xl outline-none focus:ring-2 focus:ring-primary font-medium"
+                  className="w-full min-h-[200px] p-6 bg-accent/30 border-none outline-none focus:ring-0 font-bold text-xs uppercase tracking-widest leading-relaxed"
                   value={editData.bio}
                   onChange={(e) =>
                     setEditData({ ...editData, bio: e.target.value })
                   }
                 />
               ) : (
-                <p className="text-muted-foreground font-medium leading-relaxed">
+                <p className="text-[10px] font-bold uppercase tracking-widest leading-loose opacity-60">
                   {profile.bio ||
-                    "No biography provided. This player prefers to let their results speak for themselves."}
+                    "No biography provided. Operational status confirmed."}
                 </p>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </section>
         </div>
 
         {/* Main Content */}
-        <div className="lg:col-span-8 space-y-12">
-          <section className="space-y-8">
-            <div className="flex justify-between items-center">
-              <h2 className="text-3xl font-black uppercase tracking-tighter italic flex items-center gap-4">
-                <div className="w-10 h-10 bg-yellow-500/10 rounded-2xl flex items-center justify-center text-yellow-600">
-                  <Award size={24} />
-                </div>
-                Career Hall of Fame
-              </h2>
+        <div className="lg:col-span-8 space-y-20">
+          <section className="space-y-12">
+            <div className="flex justify-between items-end border-b pb-6">
+              <h2 className="text-xs font-black uppercase tracking-[0.4em] opacity-40">Achievements</h2>
               {isOwnProfile && (
                 <Dialog open={awardModalOpen} onOpenChange={setAwardModalOpen}>
                   <DialogTrigger asChild>
                     <Button
                       variant="outline"
-                      size="sm"
-                      className="rounded-xl font-black gap-2"
+                      className="px-6 font-black uppercase tracking-widest text-[10px] h-10"
                     >
-                      <Plus size={16} /> ADD AWARD
+                      Add Award
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="rounded-[2.5rem] border-none shadow-2xl p-0 overflow-hidden">
-                    <DialogHeader className="bg-yellow-500 p-10 text-white">
-                      <DialogTitle className="text-3xl font-black uppercase italic tracking-tighter">
-                        New Achievement
-                      </DialogTitle>
-                      <DialogDescription className="text-white/70 font-bold uppercase text-[10px] tracking-widest mt-2">
-                        Log a new milestone in your career
+                  <DialogContent className="border-0 rounded-none p-10">
+                    <DialogHeader className="space-y-6">
+                      <DialogTitle className="text-3xl font-bold uppercase tracking-tighter">New Record</DialogTitle>
+                      <DialogDescription className="text-[10px] font-bold uppercase tracking-widest opacity-60">
+                        Log a new operational milestone.
                       </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleAddAward} className="p-10 space-y-6">
-                      <div className="space-y-2">
-                        <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                          Achievement Title
-                        </Label>
+                    <form onSubmit={handleAddAward} className="space-y-8 pt-8">
+                      <div className="space-y-3">
+                        <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Achievement Title</Label>
                         <Input
-                          placeholder="E.g. Golden Boot, MVP"
-                          className="h-14 rounded-2xl font-black text-lg"
+                          placeholder="E.G. MVP"
+                          className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs uppercase"
                           value={newAward.title}
                           onChange={(e) =>
                             setNewAward({ ...newAward, title: e.target.value })
@@ -328,13 +311,11 @@ const PublicProfilePage = () => {
                           required
                         />
                       </div>
-                      <div className="space-y-2">
-                        <Label className="font-black uppercase text-[10px] tracking-widest text-muted-foreground">
-                          Context / Competition
-                        </Label>
+                      <div className="space-y-3">
+                        <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Context</Label>
                         <Input
-                          placeholder="E.g. Pro League 2025"
-                          className="h-14 rounded-2xl font-black text-lg"
+                          placeholder="E.G. PRO LEAGUE"
+                          className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs uppercase"
                           value={newAward.description}
                           onChange={(e) =>
                             setNewAward({
@@ -345,178 +326,139 @@ const PublicProfilePage = () => {
                           required
                         />
                       </div>
-                      <DialogFooter>
-                        <Button
-                          type="submit"
-                          className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-yellow-500/20 mt-4 bg-yellow-500 hover:bg-yellow-600"
-                        >
-                          COMMIT ACHIEVEMENT
-                        </Button>
-                      </DialogFooter>
+                      <Button type="submit" className="w-full font-black uppercase tracking-widest text-[10px] h-14">Commit Achievement</Button>
                     </form>
                   </DialogContent>
                 </Dialog>
               )}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {profile.awards?.map((award) => (
-                <Card
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border-t border-l">
+              {profile.awards?.map((award, i) => (
+                <div
                   key={award.id}
-                  className="rounded-3xl border-border/40 hover:border-primary/30 transition-all group overflow-hidden relative"
+                  className="p-10 border-r border-b hover:bg-accent/30 transition-colors group relative"
                 >
-                  <CardContent className="p-8 text-center space-y-4">
-                    <Trophy className="mx-auto text-yellow-500 w-12 h-12 transition-transform group-hover:scale-110" />
-                    <div>
-                      <p className="font-black text-xl uppercase tracking-tight">
-                        {award.title}
-                      </p>
-                      <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest mt-1 italic">
-                        {award.description}
-                      </p>
+                  <div className="flex flex-col space-y-8">
+                    <div className="flex items-center justify-between">
+                       <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20">Record {String(i + 1).padStart(2, '0')}</span>
+                       <Trophy className="opacity-20 group-hover:opacity-100 transition-opacity" size={16} />
                     </div>
-                    {isOwnProfile && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteAward(award.id)}
-                        className="absolute top-4 right-4 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Trash2 size={16} />
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
+                    <div className="space-y-2">
+                       <h3 className="text-2xl font-bold uppercase tracking-tighter leading-none">{award.title}</h3>
+                       <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest opacity-40">{award.description}</p>
+                    </div>
+                  </div>
+                  {isOwnProfile && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteAward(award.id)}
+                      className="absolute top-4 right-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  )}
+                </div>
               ))}
               {(!profile.awards || profile.awards.length === 0) && (
-                <div className="col-span-full py-20 text-center bg-muted/10 rounded-[2.5rem] border-2 border-dashed">
-                  <p className="text-muted-foreground font-black uppercase text-xs tracking-widest italic">
-                    No achievements logged yet
-                  </p>
+                <div className="col-span-full py-20 text-center border-b border-r">
+                   <h3 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30">No recorded achievements</h3>
                 </div>
               )}
             </div>
           </section>
 
-          <section className="space-y-8">
-            <h2 className="text-3xl font-black uppercase tracking-tighter italic flex items-center gap-4">
-              <div className="w-10 h-10 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
-                <History size={24} />
-              </div>
-              Tournament Timeline
-            </h2>
-            <Card className="rounded-[2.5rem] shadow-xl border-border/50 overflow-hidden">
+          <section className="space-y-12">
+            <h2 className="text-xs font-black uppercase tracking-[0.4em] opacity-40 border-b pb-6">Timeline</h2>
+            <div className="border-t border-l">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="pl-8 uppercase font-black text-[10px]">
-                      Competition
-                    </TableHead>
-                    <TableHead className="uppercase font-black text-[10px]">
-                      Type
-                    </TableHead>
-                    <TableHead className="uppercase font-black text-[10px]">
-                      Sport
-                    </TableHead>
-                    <TableHead className="text-right pr-8 uppercase font-black text-[10px]">
-                      Status
-                    </TableHead>
+                  <TableRow className="bg-background hover:bg-background border-none h-16">
+                    <TableHead className="pl-8 uppercase font-black text-[10px] tracking-widest border-r border-b">Competition</TableHead>
+                    <TableHead className="uppercase font-black text-[10px] tracking-widest border-r border-b">Type</TableHead>
+                    <TableHead className="text-right pr-8 uppercase font-black text-[10px] tracking-widest border-r border-b">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {history.map((h) => (
                     <TableRow
                       key={h.id}
-                      className="h-16 group cursor-pointer hover:bg-muted/20"
+                      className="h-20 border-none hover:bg-accent/30 transition-colors group cursor-pointer"
                       onClick={() =>
                         (window.location.href = `/tournament/${h.id}`)
                       }
                     >
-                      <TableCell className="pl-8 font-black uppercase tracking-tight italic text-lg">
-                        {h.name}
+                      <TableCell className="pl-8 border-r border-b">
+                         <div className="space-y-1">
+                            <span className="font-bold text-lg tracking-tighter uppercase leading-none">{h.name}</span>
+                            <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest opacity-40">{h.sport}</p>
+                         </div>
                       </TableCell>
-                      <TableCell className="font-bold text-muted-foreground uppercase text-[10px] tracking-widest">
-                        {h.type}
+                      <TableCell className="border-r border-b">
+                        <span className="text-[8px] font-black uppercase tracking-widest opacity-60">
+                          {h.type}
+                        </span>
                       </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className="font-black uppercase text-[9px] tracking-widest border-primary/20 text-primary"
-                        >
-                          {h.sport}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right pr-8">
-                        <div className="flex items-center justify-end gap-2 font-black text-[10px] uppercase text-muted-foreground">
-                          <Activity
-                            size={12}
-                            className="text-green-500 animate-pulse"
-                          />{" "}
+                      <TableCell className="text-right pr-8 border-r border-b">
+                        <span className="text-[8px] font-black uppercase tracking-widest px-3 py-1 border border-primary bg-primary text-primary-foreground">
                           ACTIVE
-                        </div>
+                        </span>
                       </TableCell>
                     </TableRow>
                   ))}
                   {history.length === 0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={4}
-                        className="h-32 text-center text-muted-foreground font-black uppercase text-xs tracking-widest italic"
+                        colSpan={3}
+                        className="py-16 text-center border-r border-b"
                       >
-                        No active arena deployments found
+                         <h3 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30">No active signals</h3>
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
-            </Card>
+            </div>
           </section>
 
-          <section className="space-y-8">
-            <h2 className="text-3xl font-black uppercase tracking-tighter italic flex items-center gap-4">
-              <div className="w-10 h-10 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-600">
-                <MessageSquare size={24} />
-              </div>
-              Community Feed
-            </h2>
-            <div className="space-y-8">
-              <Card className="rounded-[2.5rem] border-none shadow-xl bg-card p-8">
-                <form onSubmit={handlePostComment} className="space-y-4">
-                  <textarea
-                    className="w-full min-h-[100px] p-6 bg-muted/30 rounded-[2rem] border-none outline-none focus:ring-2 focus:ring-primary font-medium text-base italic"
-                    placeholder="Leave a message on this player's wall..."
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                  />
-                  <div className="flex justify-end">
-                    <Button
-                      type="submit"
-                      className="rounded-2xl font-black px-8 gap-2 shadow-lg shadow-primary/20"
-                    >
-                      <Send size={16} /> BROADCAST
-                    </Button>
-                  </div>
-                </form>
-              </Card>
-
+          <section className="space-y-12">
+            <h2 className="text-xs font-black uppercase tracking-[0.4em] opacity-40 border-b pb-6">Feed</h2>
+            <div className="space-y-16">
               <div className="space-y-6">
-                {comments.map((comment) => (
-                  <Card
-                    key={comment.id}
-                    className="border-none shadow-sm bg-card/60 rounded-[2.5rem] p-8 group relative"
+                <textarea
+                  className="w-full min-h-[120px] p-8 bg-accent/30 border-none outline-none focus:ring-0 font-bold text-[10px] uppercase tracking-widest leading-relaxed"
+                  placeholder="LEAVE BROADCAST MESSAGE..."
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                />
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handlePostComment}
+                    className="px-12 font-black uppercase tracking-widest text-[10px] h-12"
                   >
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-xs">
-                          {comment.author[0].toUpperCase()}
-                        </div>
+                    Broadcast
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-0 border-t border-l">
+                {comments.map((comment, i) => (
+                  <div
+                    key={comment.id}
+                    className="p-10 border-r border-b hover:bg-accent/30 transition-colors group relative"
+                  >
+                    <div className="flex justify-between items-start mb-8">
+                      <div className="flex items-center gap-4">
+                        <span className="text-[8px] font-black uppercase tracking-[0.4em] opacity-20">{String(i + 1).padStart(2, '0')}</span>
                         <div>
                           <Link
                             to={`/player/${comment.author}`}
-                            className="font-black uppercase text-sm hover:text-primary transition-colors"
+                            className="text-[10px] font-black uppercase tracking-widest hover:opacity-50 transition-opacity"
                           >
                             {comment.author}
                           </Link>
-                          <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">
+                          <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest opacity-40">
                             {new Date(comment.created_at).toLocaleDateString()}
                           </p>
                         </div>
@@ -528,36 +470,34 @@ const PublicProfilePage = () => {
                           variant="ghost"
                           size="icon"
                           onClick={() => handleDeleteComment(comment.id)}
-                          className="text-destructive opacity-0 group-hover:opacity-100 transition-opacity rounded-xl"
+                          className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={14} />
                         </Button>
                       )}
                     </div>
-                    <p className="font-medium leading-relaxed italic text-gray-700 dark:text-gray-300 pl-2">
-                      "{comment.content}"
+                    <p className="text-[10px] font-bold uppercase tracking-widest leading-loose pl-8 border-l-2 mb-8">
+                      {comment.content}
                     </p>
-                    <div className="flex justify-between items-center mt-4 pt-4 border-t border-dashed border-border/50">
+                    <div className="flex justify-start">
                       <Button
                         variant="ghost"
                         size="sm"
                         className={cn(
-                          "rounded-full gap-2 font-black text-[10px] tracking-widest uppercase",
-                          comment.is_liked ? "text-red-500 bg-red-500/5 hover:bg-red-500/10" : "text-muted-foreground hover:bg-muted"
+                          "h-auto p-0 font-black text-[8px] tracking-[0.3em] uppercase hover:bg-transparent",
+                          comment.is_liked ? "text-primary" : "text-muted-foreground opacity-40 hover:opacity-100"
                         )}
                         onClick={() => handleToggleLike(comment.id)}
                       >
-                        <Heart size={14} className={comment.is_liked ? "fill-current" : ""} />
-                        {comment.likes_count || 0} LIKES
+                        <Heart size={10} className={cn("mr-2", comment.is_liked ? "fill-current" : "")} />
+                        {comment.likes_count || 0} APPRECIATION
                       </Button>
                     </div>
-                  </Card>
+                  </div>
                 ))}
                 {comments.length === 0 && (
-                  <div className="py-20 text-center bg-muted/10 rounded-[2.5rem] border-2 border-dashed">
-                    <p className="text-muted-foreground font-black uppercase text-xs tracking-widest italic">
-                      No broadcasts on this wall yet
-                    </p>
+                  <div className="py-20 text-center border-r border-b">
+                     <h3 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30">No active broadcasts</h3>
                   </div>
                 )}
               </div>

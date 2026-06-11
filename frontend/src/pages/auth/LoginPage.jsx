@@ -30,57 +30,61 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-8 font-sans">
-      <div className="absolute top-0 left-0 w-full h-2 bg-foreground" />
-      <Card className="w-full max-w-lg border-4 border-foreground shadow-none p-12">
-        <CardHeader className="p-0 border-none space-y-8 mb-12">
-          <div className="flex items-center justify-between">
-            <div className="w-20 h-20 border-4 border-foreground flex items-center justify-center">
-              <Shield size={40} strokeWidth={3} />
-            </div>
-            <Badge variant="outline" className="h-fit">AUTH_REQUIRED</Badge>
+    <div className="min-h-screen flex items-center justify-center bg-background p-6">
+      <div className="w-full max-w-sm space-y-12">
+        <header className="space-y-6">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-primary" />
+            <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Security Protocol</span>
           </div>
           <div className="space-y-2">
-            <CardTitle className="text-5xl font-black uppercase italic tracking-tighter leading-none">Access Control</CardTitle>
-            <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-50 italic">Verify Operator Credentials</p>
+            <h1 className="text-5xl font-bold tracking-tighter uppercase leading-none">Verify</h1>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Verify your operator credentials to continue.</p>
           </div>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="p-0 space-y-8">
-            <div className="space-y-4">
-              <Label htmlFor="username" className="text-[10px] font-black uppercase tracking-[0.3em]">Identity Key</Label>
+        </header>
+
+        <form onSubmit={handleSubmit} className="space-y-8">
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <Label htmlFor="username" className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Identity Key</Label>
               <Input 
                 id="username" 
-                placeholder="OPERATOR_ID" 
+                placeholder="OPERATOR ID" 
+                className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors uppercase font-bold tracking-widest text-xs"
                 value={username} 
                 onChange={(e) => setUsername(e.target.value)} 
                 required 
-                className="h-16 border-2 border-foreground rounded-none px-6 font-black uppercase placeholder:opacity-20"
               />
             </div>
-            <div className="space-y-4">
-              <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-[0.3em]">Security Phrase</Label>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password" className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Security Phrase</Label>
+              </div>
               <Input 
                 id="password" 
                 type="password" 
+                placeholder="••••••••"
+                className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors text-xs"
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)} 
                 required 
-                className="h-16 border-2 border-foreground rounded-none px-6 font-black"
               />
             </div>
-          </CardContent>
-          <CardFooter className="p-0 flex flex-col gap-8 mt-12">
-            <Button className="w-full h-20 text-xl uppercase italic tracking-widest" type="submit">Initialize Link</Button>
-            <div className="flex justify-between w-full text-[10px] font-black uppercase tracking-widest border-t-2 border-foreground pt-8">
-               <span className="opacity-40">No identity detected?</span>
-               <Link to="/register" className="hover:line-through underline decoration-2 underline-offset-4">Register Unit</Link>
+          </div>
+          
+          <div className="space-y-8 pt-4">
+            <Button className="w-full font-black uppercase tracking-[0.3em] text-[10px] h-14" type="submit">Initialize Session</Button>
+            
+            <div className="flex flex-col gap-4 text-center">
+              <Link to="/register" className="text-[10px] font-black uppercase tracking-[0.2em] hover:opacity-50 transition-opacity">Register New Unit</Link>
+              <Link to="/" className="text-[10px] font-black uppercase tracking-[0.2em] opacity-30 hover:opacity-100 transition-opacity">← Back to Terminal</Link>
             </div>
-          </CardFooter>
+          </div>
         </form>
-      </Card>
+      </div>
+      
       <div className="absolute bottom-12 text-[10px] font-black uppercase tracking-[0.5em] opacity-20">
-        TOURNEYPRO CLOUD OPERATIONALS // SECURE PROTOCOL
+        TourneyPro // Secure Access Matrix
       </div>
     </div>
   );

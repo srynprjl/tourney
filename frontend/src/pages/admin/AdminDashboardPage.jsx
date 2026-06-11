@@ -83,177 +83,184 @@ const AdminDashboardPage = () => {
     }
   };
 
-  if (loading) return <div className="p-12 text-center font-black animate-pulse text-muted-foreground uppercase tracking-[0.3em]">SYNCHRONIZING GLOBAL OVERSEER...</div>;
+  if (loading) return (
+    <div className="min-h-[400px] flex items-center justify-center font-bold tracking-tighter text-2xl animate-pulse uppercase">
+      Connecting to Overseer...
+    </div>
+  );
 
   const tabs = [
-    { id: 'users', label: 'Identity Control', icon: Users },
-    { id: 'tournaments', label: 'Arena Registry', icon: Trophy },
-    { id: 'infrastructure', label: 'System Vitals', icon: HeartPulse },
-    { id: 'reports', label: 'Incidents', icon: AlertCircle },
+    { id: 'users', label: 'Identity', icon: Users },
+    { id: 'tournaments', label: 'Arenas', icon: Trophy },
+    { id: 'infrastructure', label: 'Nodes', icon: HeartPulse },
+    { id: 'reports', label: 'Signals', icon: AlertCircle },
   ];
 
   return (
-    <div className="max-w-7xl mx-auto space-y-12 pb-24">
-      <header className="flex justify-between items-end px-4">
-        <div>
-          <h1 className="text-6xl font-black tracking-tighter italic uppercase mb-2">Global Oversight</h1>
-          <p className="text-primary font-black uppercase text-xs tracking-[0.4em]">Ecosystem Level 4 Clearance Restricted Area</p>
+    <div className="space-y-12 pb-20">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 pb-10 border-b">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-primary" />
+            <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Administrative Protocol</span>
+          </div>
+          <h1 className="text-6xl font-bold tracking-tighter uppercase leading-none">Overseer</h1>
         </div>
-        <Button variant="outline" size="lg" className="gap-3 rounded-2xl font-black border-primary/20 shadow-xl" onClick={() => { fetchData(); checkHealth(); }}>
-          <RefreshCw size={18} /> SYNC ECOSYSTEM
+        <Button 
+          variant="outline" 
+          className="px-8 font-black uppercase tracking-widest text-[10px] h-12" 
+          onClick={() => { fetchData(); checkHealth(); }}
+        >
+          <RefreshCw size={14} className="mr-2" /> Sync Ecosystem
         </Button>
       </header>
 
       {/* Tabs */}
-      <div className="flex gap-2 bg-muted/40 p-2 rounded-[2.5rem] w-fit border border-border/50 backdrop-blur-md mx-4">
+      <div className="flex border-b">
         {tabs.map(tab => (
-          <Button
+          <button
             key={tab.id}
-            variant={activeTab === tab.id ? 'default' : 'ghost'}
             className={cn(
-              "rounded-[2rem] gap-3 px-10 font-black text-xs uppercase tracking-widest transition-all h-14",
-              activeTab === tab.id ? "shadow-2xl shadow-primary/30 bg-card text-primary" : "text-muted-foreground"
+              "px-8 py-4 text-[10px] font-black uppercase tracking-[0.3em] transition-all",
+              activeTab === tab.id ? "border-b-2 border-primary" : "opacity-30 hover:opacity-100"
             )}
             onClick={() => setActiveTab(tab.id)}
           >
-            <tab.icon size={18} />
             {tab.label}
-          </Button>
+          </button>
         ))}
       </div>
 
-      <div className="mt-12 px-4">
+      <div className="mt-12">
         {activeTab === 'users' && (
            <div className="space-y-12">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <Card className="bg-primary/5 border-none shadow-xl rounded-[3rem] p-10 group">
-                   <p className="text-[10px] font-black uppercase text-primary tracking-[0.3em] mb-4">Total Population</p>
-                   <p className="text-6xl font-black tracking-tighter group-hover:scale-110 transition-transform origin-left">{stats?.total_users || 0}</p>
-                </Card>
-                <Card className="bg-orange-500/5 border-none shadow-xl rounded-[3rem] p-10 group">
-                   <p className="text-[10px] font-black uppercase text-orange-600 tracking-[0.3em] mb-4">Admin Units</p>
-                   <p className="text-6xl font-black tracking-tighter text-orange-600 group-hover:scale-110 transition-transform origin-left">{stats?.admin_count || 0}</p>
-                </Card>
-                <Card className="bg-destructive/5 border-none shadow-xl rounded-[3rem] p-10 group">
-                   <p className="text-[10px] font-black uppercase text-red-600 tracking-[0.3em] mb-4">Blacklisted</p>
-                   <p className="text-6xl font-black tracking-tighter text-red-600 group-hover:scale-110 transition-transform origin-left">{users.filter(u => u.is_banned).length}</p>
-                </Card>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border-t border-l">
+                <div className="p-10 border-r border-b hover:bg-accent/30 transition-colors group">
+                   <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 mb-8">01. Total Population</p>
+                   <p className="text-6xl font-bold tracking-tighter uppercase leading-none">{stats?.total_users || 0}</p>
+                </div>
+                <div className="p-10 border-r border-b hover:bg-accent/30 transition-colors group">
+                   <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 mb-8">02. Admin Units</p>
+                   <p className="text-6xl font-bold tracking-tighter uppercase leading-none">{stats?.admin_count || 0}</p>
+                </div>
+                <div className="p-10 border-r border-b hover:bg-accent/30 transition-colors group">
+                   <p className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 mb-8">03. Blacklisted</p>
+                   <p className="text-6xl font-bold tracking-tighter uppercase leading-none">{users.filter(u => u.is_banned).length}</p>
+                </div>
               </div>
 
-              <Card className="rounded-[3.5rem] shadow-2xl border-none overflow-hidden bg-card">
+              <div className="border-t border-l">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/40 hover:bg-muted/40 border-none h-20">
-                      <TableHead className="pl-12 font-black uppercase text-[11px] tracking-widest">Entity Identity</TableHead>
-                      <TableHead className="font-black uppercase text-[11px] tracking-widest">Clearance Level</TableHead>
-                      <TableHead className="font-black uppercase text-[11px] tracking-widest">Integrity Status</TableHead>
-                      <TableHead className="text-right pr-12 font-black uppercase text-[11px] tracking-widest">Terminal Actions</TableHead>
+                    <TableRow className="bg-background hover:bg-background border-none h-16">
+                      <TableHead className="pl-8 font-black uppercase text-[10px] tracking-widest border-r border-b">Identity</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest border-r border-b">Clearance</TableHead>
+                      <TableHead className="font-black uppercase text-[10px] tracking-widest border-r border-b">Integrity</TableHead>
+                      <TableHead className="text-right pr-8 font-black uppercase text-[10px] tracking-widest border-r border-b">Control</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {users.map((u) => (
-                      <TableRow key={u.id} className={cn("h-24 border-border/40 transition-colors", u.is_banned && "bg-destructive/5 opacity-80")}>
-                        <TableCell className="pl-12">
+                      <TableRow key={u.id} className={cn("h-20 border-none hover:bg-accent/30 transition-colors group", u.is_banned && "bg-destructive/5 opacity-80")}>
+                        <TableCell className="pl-8 border-r border-b">
                            <div className="flex flex-col">
-                              <span className="font-black text-xl tracking-tighter uppercase">{u.username}</span>
-                              <span className="text-[9px] font-bold text-muted-foreground uppercase opacity-40">UID: {u.id}</span>
+                              <span className="font-bold text-lg tracking-tighter uppercase">{u.username}</span>
+                              <span className="text-[8px] font-black text-muted-foreground uppercase opacity-40 tracking-widest">UID: {u.id}</span>
                            </div>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant={u.is_admin ? "default" : "secondary"} className="rounded-xl font-black text-[10px] tracking-widest px-4 h-8 bg-primary/10 text-primary border-none">
-                            {u.is_admin ? "SYSTEM ADMIN" : "CIVILIAN UNIT"}
-                          </Badge>
+                        <TableCell className="border-r border-b">
+                          <span className={cn(
+                            "text-[8px] font-black uppercase tracking-widest border px-3 py-1",
+                            u.is_admin ? "border-primary bg-primary text-primary-foreground" : "border-muted text-muted-foreground"
+                          )}>
+                            {u.is_admin ? "ADMIN" : "CIVILIAN"}
+                          </span>
                         </TableCell>
-                        <TableCell>
-                          {u.is_banned ? (
-                            <Badge variant="destructive" className="gap-2 rounded-xl font-black text-[10px] px-4 h-8"><Ban size={14}/> TERMINATED</Badge>
-                          ) : (
-                            <Badge variant="outline" className="gap-2 rounded-xl border-green-500/20 text-green-600 font-black text-[10px] px-4 h-8 bg-green-500/5"><CheckCircle2 size={14}/> VERIFIED</Badge>
-                          )}
+                        <TableCell className="border-r border-b">
+                          <span className={cn(
+                            "text-[8px] font-black uppercase tracking-widest border px-3 py-1",
+                            u.is_banned ? "border-red-600 bg-red-600 text-white" : "border-muted text-muted-foreground"
+                          )}>
+                            {u.is_banned ? "TERMINATED" : "VERIFIED"}
+                          </span>
                         </TableCell>
-                        <TableCell className="text-right pr-12 space-x-3">
-                          <Button variant="ghost" size="icon" className="w-14 h-14 rounded-[1.5rem] bg-muted/20 hover:bg-orange-500/20" title="Toggle Admin" onClick={() => toggleAdmin(u.id)}>
-                            <Shield size={24} className={u.is_admin ? "text-orange-500" : "text-muted-foreground/30"} />
+                        <TableCell className="text-right pr-8 border-r border-b space-x-2">
+                          <Button variant="outline" size="sm" className="w-10 h-10 border rounded-none p-0" title="Toggle Admin" onClick={() => toggleAdmin(u.id)}>
+                            <Shield size={14} className={u.is_admin ? "text-primary" : "text-muted-foreground/30"} />
                           </Button>
-                          <Button variant="ghost" size="icon" className="w-14 h-14 rounded-[1.5rem] bg-muted/20 hover:bg-red-500/20" title={u.is_banned ? "Restore" : "Terminate"} onClick={() => toggleBan(u.id)}>
-                            <Ban size={24} className={u.is_banned ? "text-red-600" : "text-muted-foreground/30"} />
+                          <Button variant="outline" size="sm" className="w-10 h-10 border rounded-none p-0" title={u.is_banned ? "Restore" : "Terminate"} onClick={() => toggleBan(u.id)}>
+                            <Ban size={14} className={u.is_banned ? "text-red-600" : "text-muted-foreground/30"} />
                           </Button>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              </Card>
+              </div>
            </div>
         )}
 
         {activeTab === 'tournaments' && (
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {tournaments.map(t => (
-                <Card key={t.id} className="rounded-[3rem] border-none shadow-xl bg-card group p-10 space-y-6">
-                   <div className="flex justify-between items-start">
-                      <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] tracking-widest px-4 py-1 rounded-full uppercase">{t.sport}</Badge>
-                      {t.is_public ? <Globe size={18} className="text-green-500" /> : <Lock size={18} className="text-orange-500" />}
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-0 border-t border-l">
+              {tournaments.map((t, i) => (
+                <div key={t.id} className="p-10 border-r border-b hover:bg-accent/30 transition-colors group flex flex-col h-full">
+                   <div className="flex justify-between items-start mb-12">
+                      <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20">Arena {String(i + 1).padStart(2, '0')}</span>
+                      <div className="flex gap-4 opacity-40">
+                         {t.is_public ? <Globe size={14} /> : <Lock size={14} />}
+                      </div>
                    </div>
-                   <div className="space-y-1">
-                      <h3 className="text-3xl font-black tracking-tighter uppercase italic">{t.name}</h3>
-                      <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Creator ID: {t.creator_id}</p>
+                   <div className="space-y-4 mb-16 flex-1">
+                      <span className="text-[8px] font-black uppercase tracking-[0.3em] opacity-60">{t.sport} // {t.creator_id}</span>
+                      <h3 className="text-3xl font-bold uppercase tracking-tighter leading-none italic">{t.name}</h3>
                    </div>
-                   <div className="pt-4 border-t border-border/50 flex gap-3">
-                      <Button asChild className="flex-1 rounded-2xl font-black h-12">
-                         <Link to={`/tournament/${t.id}`}>ENTER ARENA</Link>
+                   <div className="flex gap-4">
+                      <Button asChild variant="outline" className="flex-1 font-black uppercase tracking-widest text-[10px] h-12">
+                         <Link to={`/tournament/${t.id}`}>Enter Arena</Link>
                       </Button>
-                      <Button variant="ghost" className="w-12 h-12 p-0 text-destructive hover:bg-red-500/10 rounded-2xl">
-                         <Trash2 size={20}/>
+                      <Button variant="outline" className="w-12 h-12 p-0 text-muted-foreground hover:text-red-600 border" onClick={() => { if(window.confirm('Terminate Arena?')) alert('Operation restricted'); }}>
+                         <Trash2 size={16}/>
                       </Button>
                    </div>
-                </Card>
+                </div>
               ))}
            </div>
         )}
 
         {activeTab === 'infrastructure' && (
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {services.map((s) => (
-                <Card key={s.id} className="rounded-[3rem] border-none shadow-xl bg-card overflow-hidden relative group">
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-0 border-t border-l">
+              {services.map((s, i) => (
+                <div key={s.id} className="p-10 border-r border-b hover:bg-accent/30 transition-colors group relative overflow-hidden">
                   <div className={cn(
-                    "absolute top-0 left-0 w-full h-1.5 transition-all duration-500",
-                    s.status === 'healthy' ? "bg-green-500" : "bg-red-600 animate-pulse"
+                    "absolute top-0 left-0 w-full h-[2px] transition-all duration-500",
+                    s.status === 'healthy' ? "bg-primary" : "bg-red-600 animate-pulse"
                   )} />
-                  <CardContent className="p-10 space-y-8">
+                  <div className="space-y-12">
                     <div className="flex justify-between items-start">
-                       <div className="w-16 h-16 bg-muted/40 rounded-[1.5rem] flex items-center justify-center">
-                          <Activity size={32} className={cn(s.status === 'healthy' ? "text-green-500" : "text-red-500")} />
-                       </div>
-                       {s.status === 'healthy' ? <SignalHigh size={20} className="text-green-500" /> : <SignalLow size={20} className="text-red-500 animate-ping" />}
+                       <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20">Node {String(i + 1).padStart(2, '0')}</span>
+                       {s.status === 'healthy' ? <SignalHigh size={14} className="opacity-40" /> : <SignalLow size={14} className="text-red-600 animate-pulse" />}
                     </div>
-                    <div className="space-y-1">
-                       <h3 className="text-xl font-black uppercase tracking-tight italic">{s.name}</h3>
-                       <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{s.url}</p>
+                    <div className="space-y-2">
+                       <h3 className="text-2xl font-bold uppercase tracking-tighter leading-none">{s.name}</h3>
+                       <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest opacity-40">{s.url}</p>
                     </div>
-                    <div className="flex items-center gap-4 pt-4 border-t border-border/50">
-                       <Badge variant="outline" className={cn(
-                         "h-8 px-4 rounded-full font-black text-[10px] tracking-widest uppercase border-none",
-                         s.status === 'healthy' ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"
+                    <div className="pt-4 border-t">
+                       <span className={cn(
+                         "text-[8px] font-black uppercase tracking-[0.3em] px-3 py-1 border",
+                         s.status === 'healthy' ? "border-primary bg-primary text-primary-foreground" : "border-red-600 text-red-600"
                        )}>
                           {s.status}
-                       </Badge>
+                       </span>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
            </div>
         )}
 
         {activeTab === 'reports' && (
-           <div className="max-w-3xl mx-auto py-40 text-center space-y-8 bg-muted/10 rounded-[4rem] border-4 border-dashed border-border/50">
-              <div className="w-32 h-32 bg-muted/50 rounded-[3rem] mx-auto flex items-center justify-center shadow-inner">
-                 <Shield size={64} className="text-muted-foreground/20" />
-              </div>
-              <div className="space-y-2">
-                <p className="text-4xl font-black text-muted-foreground/40 uppercase tracking-tighter italic">Sector Secured</p>
-                <p className="text-xs font-bold text-muted-foreground/30 uppercase tracking-[0.4em]">No community incident reports detected</p>
-              </div>
+           <div className="py-32 text-center border-t border-b">
+              <h3 className="text-xs font-black uppercase tracking-[0.5em] opacity-30">No active signals detected</h3>
            </div>
         )}
       </div>
