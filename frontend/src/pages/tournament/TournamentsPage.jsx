@@ -53,7 +53,7 @@ const TournamentsPage = () => {
   const [formData, setFormData] = useState({
     name: "",
     type: "knockout",
-    sport: "football",
+    sport: "General",
     mode: "self",
     max_teams: 8,
     is_public: true,
@@ -78,6 +78,16 @@ const TournamentsPage = () => {
   useEffect(() => {
     fetchTournaments();
   }, []);
+
+  // Sync max_teams when group settings change
+  useEffect(() => {
+    if (formData.type === "group") {
+      setFormData(prev => ({
+        ...prev,
+        max_teams: prev.group_count * prev.teams_per_group
+      }));
+    }
+  }, [formData.group_count, formData.teams_per_group, formData.type]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -190,25 +200,6 @@ const TournamentsPage = () => {
                   </div>
 
                   <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Sport</Label>
-                    <Select
-                      value={formData.sport}
-                      onValueChange={(v) =>
-                        setFormData({ ...formData, sport: v })
-                      }
-                    >
-                      <SelectTrigger className="rounded-none border-x-0 border-t-0 border-b shadow-none font-bold uppercase tracking-widest text-[10px] h-12">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-none border shadow-none">
-                        <SelectItem value="football" className="text-[10px] font-bold uppercase tracking-widest">Football</SelectItem>
-                        <SelectItem value="cricket" className="text-[10px] font-bold uppercase tracking-widest">Cricket</SelectItem>
-                        <SelectItem value="basketball" className="text-[10px] font-bold uppercase tracking-widest">Basketball</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-3">
                     <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Format</Label>
                     <Select
                       value={formData.type}
@@ -226,30 +217,44 @@ const TournamentsPage = () => {
                     </Select>
                   </div>
 
-                  <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Max Teams</Label>
-                    <Input
-                      type="number"
-                      className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs"
-                      value={formData.max_teams}
-                      onChange={(e) =>
-                        setFormData({ ...formData, max_teams: e.target.value })
-                      }
-                    />
-                  </div>
-
-                  <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Entry Fee (USD)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs"
-                      value={formData.entry_fee}
-                      onChange={(e) =>
-                        setFormData({ ...formData, entry_fee: e.target.value })
-                      }
-                    />
-                  </div>
+                  {formData.type === "knockout" ? (
+                    <div className="space-y-3">
+                      <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Max Teams</Label>
+                      <Input
+                        type="number"
+                        className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs"
+                        value={formData.max_teams}
+                        onChange={(e) =>
+                          setFormData({ ...formData, max_teams: e.target.value })
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-3">
+                        <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Number of Groups</Label>
+                        <Input
+                          type="number"
+                          className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs"
+                          value={formData.group_count}
+                          onChange={(e) =>
+                            setFormData({ ...formData, group_count: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-3">
+                        <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Teams per Group</Label>
+                        <Input
+                          type="number"
+                          className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs"
+                          value={formData.teams_per_group}
+                          onChange={(e) =>
+                            setFormData({ ...formData, teams_per_group: e.target.value })
+                          }
+                        />
+                      </div>
+                    </>
+                  )}
 
                   <div className="flex items-center justify-between py-6 border-b col-span-full">
                     <div className="space-y-1">
@@ -321,7 +326,7 @@ const TournamentsPage = () => {
             </div>
 
             <div className="space-y-4 mb-16 flex-1">
-               <span className="text-[8px] font-black uppercase tracking-[0.3em] opacity-60">{t.sport} // {t.type}</span>
+               <span className="text-[8px] font-black uppercase tracking-[0.3em] opacity-60">{t.type} Arena</span>
                <h3 className="text-3xl font-bold uppercase tracking-tighter leading-none">{t.name}</h3>
             </div>
 
@@ -330,10 +335,12 @@ const TournamentsPage = () => {
                   <p className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.3em]">Max Teams</p>
                   <p className="text-xl font-bold uppercase tracking-tighter">{t.max_teams} Teams</p>
                </div>
-               <div className="space-y-1">
-                  <p className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.3em]">Entry Fee</p>
-                  <p className="text-xl font-bold uppercase tracking-tighter">${t.entry_fee}</p>
-               </div>
+               {t.type === 'group' && (
+                 <div className="space-y-1">
+                    <p className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.3em]">Groups</p>
+                    <p className="text-xl font-bold uppercase tracking-tighter">{t.group_count} Units</p>
+                 </div>
+               )}
             </div>
 
             <Button asChild variant="outline" className="w-full font-black uppercase tracking-widest text-[10px] h-12">

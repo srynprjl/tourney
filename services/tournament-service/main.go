@@ -342,6 +342,20 @@ func updateTournament(c *gin.Context) {
 
 func deleteTournament(c *gin.Context) {
 	id := c.Param("id")
+	uid := c.MustGet("user_id").(uint)
+	isAdmin := c.MustGet("is_admin").(bool)
+
+	var t Tournament
+	if err := db.First(&t, "id = ?", id).Error; err != nil {
+		c.JSON(404, gin.H{"error": "Tournament not found"})
+		return
+	}
+
+	if t.CreatorID != uid && !isAdmin {
+		c.JSON(403, gin.H{"error": "Unauthorized"})
+		return
+	}
+
 	// Clear matches in match-service
 	matchURL := os.Getenv("MATCH_SERVICE_URL")
 	if matchURL == "" {
@@ -638,20 +652,41 @@ func pushMatches(matches []Match, authHeader string) {
 
 func generateGroupStage(t Tournament, authHeader string) {
 	teams := t.Teams
+	n := len(teams)
+	g := t.GroupCount
+	if g <= 0 {
+		g = 1
+	}
+
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	r.Shuffle(len(teams), func(i, j int) { teams[i], teams[j] = teams[j], teams[i] })
-	if t.GroupCount > 1 {
+	r.Shuffle(n, func(i, j int) { teams[i], teams[j] = teams[j], teams[i] })
+
+	if g > 1 {
+		base := n / g
+		remainder := n % g
 		for i := range teams {
-			gn := string(rune('A' + (i / t.TeamsPerGroup)))
+			var groupIdx int
+			if i < remainder*(base+1) {
+				groupIdx = i / (base + 1)
+			} else {
+				groupIdx = remainder + (i-remainder*(base+1))/base
+			}
+			gn := string(rune('A' + groupIdx))
 			teams[i].GroupName = gn
 			db.Model(&teams[i]).Update("group_name", gn)
 		}
+	} else if n > 0 {
+		for i := range teams {
+			teams[i].GroupName = ""
+			db.Model(&teams[i]).Update("group_name", "")
+		}
 	}
+
 	var allGR [][][]Match
-	for g := 0; g < t.GroupCount; g++ {
+	for j := 0; j < g; j++ {
 		gn := ""
-		if t.GroupCount > 1 {
-			gn = string(rune('A' + g))
+		if g > 1 {
+			gn = string(rune('A' + j))
 		}
 		var gts []Team
 		for _, tm := range teams {

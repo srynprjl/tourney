@@ -35,7 +35,7 @@ const TeamsListPage = () => {
 
   const [formData, setFormData] = useState({
     name: '',
-    sport: 'football',
+    sport: 'General',
     description: '',
     is_public: true
   });
@@ -173,9 +173,9 @@ const TeamsListPage = () => {
                                 <Select value={formData.sport} onValueChange={v => setFormData({...formData, sport: v})}>
                                    <SelectTrigger><SelectValue /></SelectTrigger>
                                    <SelectContent>
-                                      <SelectItem value="football">Football</SelectItem>
-                                      <SelectItem value="cricket">Cricket</SelectItem>
-                                      <SelectItem value="basketball">Basketball</SelectItem>
+                                      <SelectItem value="General">General</SelectItem>
+                                      <SelectItem value="Esports">Esports</SelectItem>
+                                      <SelectItem value="Other">Other</SelectItem>
                                    </SelectContent>
                                 </Select>
                              </div>

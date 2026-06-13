@@ -83,6 +83,16 @@ const AdminDashboardPage = () => {
     }
   };
 
+  const deleteTournament = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this tournament? This action cannot be undone.')) return;
+    try {
+      await api.delete(`/tournaments/${id}`);
+      fetchData();
+    } catch (err) {
+      alert('Failed to delete tournament');
+    }
+  };
+
   if (loading) return (
     <div className="min-h-[400px] flex items-center justify-center font-bold tracking-tighter text-2xl animate-pulse uppercase">
       Loading Admin Panel...
@@ -211,14 +221,14 @@ const AdminDashboardPage = () => {
                       </div>
                    </div>
                    <div className="space-y-4 mb-16 flex-1">
-                      <span className="text-[8px] font-black uppercase tracking-[0.3em] opacity-60">{t.sport} // {t.creator_id}</span>
+                      <span className="text-[8px] font-black uppercase tracking-[0.3em] opacity-60">{t.type} Arena // {t.creator_id}</span>
                       <h3 className="text-3xl font-bold uppercase tracking-tighter leading-none italic">{t.name}</h3>
                    </div>
                    <div className="flex gap-4">
                       <Button asChild variant="outline" className="flex-1 font-black uppercase tracking-widest text-[10px] h-12">
                          <Link to={`/tournament/${t.id}`}>Enter Arena</Link>
                       </Button>
-                      <Button variant="outline" className="w-12 h-12 p-0 text-muted-foreground hover:text-red-600 border" onClick={() => { if(window.confirm('Delete Arena?')) alert('Operation restricted'); }}>
+                      <Button variant="outline" className="w-12 h-12 p-0 text-muted-foreground hover:text-red-600 border" onClick={() => deleteTournament(t.id)}>
                          <Trash2 size={16}/>
                       </Button>
                    </div>

@@ -362,7 +362,6 @@ const TournamentDetailsPage = () => {
             <h1 className="text-4xl font-bold tracking-tight">
               {tournament.name}
             </h1>
-            <Badge variant="secondary" className="capitalize">{tournament.sport}</Badge>
           </div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground font-medium">
             {tournament.is_public ? (
@@ -701,9 +700,7 @@ const TournamentDetailsPage = () => {
                         <div className="space-y-2">
                           <Label>Select Squad</Label>
                           <div className="grid gap-2 max-h-[200px] overflow-y-auto p-1">
-                            {myTeams
-                              .filter((t) => t.sport === tournament.sport)
-                              .map((t) => (
+                            {myTeams.map((t) => (
                                 <div
                                   key={t.id}
                                   onClick={() => setSelectedTeamId(t.id)}
