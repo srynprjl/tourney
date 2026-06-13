@@ -49,7 +49,8 @@ services:
     environment:
       - DB_URL=postgres://user:password@db-auth:5432/auth_db?sslmode=disable
       - JWT_SECRET=your_jwt_secret
-    depends_on: [db-auth]
+      - REDIS_URL=redis:6379
+    depends_on: [db-auth, redis]
 
   tournament-service:
     build: ./services/tournament-service
@@ -58,7 +59,8 @@ services:
       - AUTH_SERVICE_URL=http://auth-service:8081
       - TEAM_SERVICE_URL=http://team-service:8084
       - MATCH_SERVICE_URL=http://match-service:8083
-    depends_on: [db-tournament, auth-service]
+      - REDIS_URL=redis:6379
+    depends_on: [db-tournament, auth-service, redis]
 
   match-service:
     build: ./services/match-service
@@ -67,7 +69,8 @@ services:
       - TOURNAMENT_SERVICE_URL=http://tournament-service:8082
       - AUTH_SERVICE_URL=http://auth-service:8081
       - REALTIME_SERVICE_URL=http://realtime-service:8087
-    depends_on: [db-match, tournament-service]
+      - REDIS_URL=redis:6379
+    depends_on: [db-match, tournament-service, redis]
 
   team-service:
     build: ./services/team-service
@@ -75,14 +78,16 @@ services:
       - DB_URL=postgres://user:password@db-team:5432/team_db?sslmode=disable
       - AUTH_SERVICE_URL=http://auth-service:8081
       - REALTIME_SERVICE_URL=http://realtime-service:8087
-    depends_on: [db-team]
+      - REDIS_URL=redis:6379
+    depends_on: [db-team, redis]
 
   profile-service:
     build: ./services/profile-service
     environment:
       - DB_URL=postgres://user:password@db-profile:5432/profile_db?sslmode=disable
       - AUTH_SERVICE_URL=http://auth-service:8081
-    depends_on: [db-profile]
+      - REDIS_URL=redis:6379
+    depends_on: [db-profile, redis]
 
   realtime-service:
     build: ./services/realtime-service

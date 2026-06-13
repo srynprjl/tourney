@@ -21,13 +21,16 @@ const AdminDashboardPage = () => {
   const [stats, setStats] = useState(null);
   const [tournaments, setTournaments] = useState([]);
   const [activeTab, setActiveTab] = useState('users');
+  const [selectedLogService, setSelectedLogService] = useState('auth');
+  const [logContent, setLogContent] = useState('');
+  const [mqStats, setMQStats] = useState({});
   const [services, setServices] = useState([
-    { id: 'auth', name: 'Auth Identity Core', url: '/auth/health', status: 'unknown' },
-    { id: 'tournament', name: 'Tournament Engine', url: '/tournaments/health', status: 'unknown' },
-    { id: 'match', name: 'Match Logic Processor', url: '/matches/health', status: 'unknown' },
-    { id: 'team', name: 'Squad Roster Cloud', url: '/team/health', status: 'unknown' },
-    { id: 'profile', name: 'Player Profile Hub', url: '/profile/health', status: 'unknown' },
-    { id: 'realtime', name: 'WebSocket Realtime', url: '/realtime/health', status: 'unknown' },
+    { id: 'auth', name: 'Auth Identity Core', url: '/auth/health', logs: '/auth/admin/logs', mq: '/auth/admin/mq-stats', status: 'unknown' },
+    { id: 'tournament', name: 'Tournament Engine', url: '/tournaments/health', logs: '/tournaments/admin/logs', mq: '/tournaments/admin/mq-stats', status: 'unknown' },
+    { id: 'match', name: 'Match Logic Processor', url: '/matches/health', logs: '/matches/admin/logs', mq: '/matches/admin/mq-stats', status: 'unknown' },
+    { id: 'team', name: 'Squad Roster Cloud', url: '/team/health', logs: '/team/admin/logs', mq: '/team/admin/mq-stats', status: 'unknown' },
+    { id: 'profile', name: 'Player Profile Hub', url: '/profile/health', logs: '/profile/admin/logs', mq: '/profile/admin/mq-stats', status: 'unknown' },
+    { id: 'realtime', name: 'WebSocket Realtime', url: '/realtime/health', logs: '/realtime/admin/logs', mq: '/realtime/admin/mq-stats', status: 'unknown' },
   ]);
   const [loading, setLoading] = useState(true);
 
@@ -35,6 +38,15 @@ const AdminDashboardPage = () => {
     fetchData();
     checkHealth();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'logs') {
+      fetchLogs(selectedLogService);
+    }
+    if (activeTab === 'infrastructure') {
+      fetchMQStats();
+    }
+  }, [activeTab, selectedLogService]);
 
   const fetchData = async () => {
     try {
@@ -63,6 +75,31 @@ const AdminDashboardPage = () => {
       }
     }));
     setServices(updatedServices);
+  };
+
+  const fetchLogs = async (serviceId) => {
+    const service = services.find(s => s.id === serviceId);
+    if (!service) return;
+    try {
+      const res = await api.get(service.logs);
+      setLogContent(res.data);
+    } catch (err) {
+      setLogContent('Failed to fetch logs: ' + err.message);
+    }
+  };
+
+  const fetchMQStats = async () => {
+    const stats = {};
+    await Promise.all(services.map(async (s) => {
+      if (!s.mq) return;
+      try {
+        const res = await api.get(s.mq);
+        stats[s.id] = res.data;
+      } catch (err) {
+        stats[s.id] = { error: true };
+      }
+    }));
+    setMQStats(stats);
   };
 
   const toggleAdmin = async (id) => {
@@ -102,7 +139,8 @@ const AdminDashboardPage = () => {
   const tabs = [
     { id: 'users', label: 'Users', icon: Users },
     { id: 'tournaments', label: 'Arenas', icon: Trophy },
-    { id: 'infrastructure', label: 'Services', icon: HeartPulse },
+    { id: 'infrastructure', label: 'Infra', icon: HeartPulse },
+    { id: 'logs', label: 'Logs', icon: Activity },
     { id: 'reports', label: 'Reports', icon: AlertCircle },
   ];
 
@@ -250,9 +288,18 @@ const AdminDashboardPage = () => {
                        <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20">Service {String(i + 1).padStart(2, '0')}</span>
                        {s.status === 'healthy' ? <SignalHigh size={14} className="opacity-40" /> : <SignalLow size={14} className="text-red-600 animate-pulse" />}
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-4">
                        <h3 className="text-2xl font-bold uppercase tracking-tighter leading-none">{s.name}</h3>
                        <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest opacity-40">{s.url}</p>
+                       
+                       {mqStats[s.id] && !mqStats[s.id].error && (
+                         <div className="mt-4 pt-4 border-t border-dashed">
+                           <div className="flex justify-between items-center">
+                             <span className="text-[8px] font-black uppercase tracking-widest opacity-40">Queue: {mqStats[s.id].queue_name}</span>
+                             <span className="text-xs font-bold font-mono tracking-tighter">{mqStats[s.id].queue_length} TASKS</span>
+                           </div>
+                         </div>
+                       )}
                     </div>
                     <div className="pt-4 border-t">
                        <span className={cn(
@@ -265,6 +312,39 @@ const AdminDashboardPage = () => {
                   </div>
                 </div>
               ))}
+           </div>
+        )}
+
+        {activeTab === 'logs' && (
+           <div className="space-y-8">
+              <div className="flex flex-wrap gap-2 border-b pb-8">
+                {services.map(s => (
+                  <button
+                    key={s.id}
+                    className={cn(
+                      "px-6 py-3 text-[8px] font-black uppercase tracking-widest border transition-all",
+                      selectedLogService === s.id ? "bg-primary text-primary-foreground border-primary" : "opacity-40 hover:opacity-100 border-muted"
+                    )}
+                    onClick={() => setSelectedLogService(s.id)}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="ml-auto h-10 px-4 font-black uppercase text-[8px] tracking-widest"
+                  onClick={() => fetchLogs(selectedLogService)}
+                >
+                  <RefreshCw size={12} className="mr-2" /> Refresh
+                </Button>
+              </div>
+              
+              <div className="bg-black p-8 border rounded-sm overflow-x-auto min-h-[500px] max-h-[800px] flex flex-col">
+                <div className="flex-1 font-mono text-xs text-green-500 whitespace-pre scrollbar-thin scrollbar-thumb-primary">
+                  {logContent || 'Initializing terminal...'}
+                </div>
+              </div>
            </div>
         )}
 

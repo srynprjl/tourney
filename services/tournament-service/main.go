@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"io"
 	"log"
+	"log/slog"
 	"math/rand"
 	"net/http"
 	"os"
@@ -12,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -26,6 +30,8 @@ const (
 type Tournament struct {
 	ID            uuid.UUID        `gorm:"type:uuid;primaryKey" json:"id"`
 	Name          string           `gorm:"not null" json:"name"`
+	Description   string           `json:"description"`
+	SimulationEnabled bool         `gorm:"default:false" json:"simulation_enabled"`
 	Type          TournamentType   `gorm:"not null" json:"type"`
 	Sport         string           `gorm:"not null" json:"sport"`
 	Mode          string           `gorm:"default:self" json:"mode"`
@@ -114,7 +120,33 @@ type Match struct {
 	Position     int        `json:"position"`
 }
 
-var db *gorm.DB
+var (
+	db     *gorm.DB
+	rdb    *redis.Client
+	ctx    = context.Background()
+	logger *slog.Logger
+)
+
+const (
+	taskQueue = "tournament_tasks"
+)
+
+func setupLogger() {
+	if err := os.MkdirAll("logs", 0755); err != nil {
+		log.Fatalf("failed to create log directory: %v", err)
+	}
+
+	logFile, err := os.OpenFile("logs/tournament-service.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("failed to open log file: %v", err)
+	}
+
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+	logger = slog.New(slog.NewJSONHandler(multiWriter, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+}
 
 func initDB() {
 	dbURL := os.Getenv("DB_URL")
@@ -127,16 +159,93 @@ func initDB() {
 		if err == nil {
 			break
 		}
+		logger.Warn("Failed to connect to tournament database", "attempt", i+1, "error", err)
 		time.Sleep(2 * time.Second)
+	}
+	if err != nil {
+		logger.Error("Could not connect to tournament database after retries", "error", err)
+		os.Exit(1)
 	}
 	db.AutoMigrate(&Tournament{}, &Team{}, &News{}, &Rule{}, &Prize{}, &Sponsor{}, &TournamentRole{})
 }
 
-func main() {
-	initDB()
-	r := gin.Default()
+func initRedis() {
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		redisURL = "localhost:6379"
+	}
+	rdb = redis.NewClient(&redis.Options{
+		Addr: redisURL,
+	})
 
-	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "healthy"}) })
+	// Test connection
+	for i := 0; i < 5; i++ {
+		err := rdb.Ping(ctx).Err()
+		if err == nil {
+			logger.Info("Connected to Redis")
+			return
+		}
+		logger.Warn("Failed to connect to Redis", "attempt", i+1, "error", err)
+		time.Sleep(2 * time.Second)
+	}
+}
+
+func startTaskWorker() {
+	logger.Info("Starting background task worker")
+	for {
+		result, err := rdb.BLPop(ctx, 0, taskQueue).Result()
+		if err != nil {
+			logger.Error("Error popping task from queue", "error", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		taskData := result[1]
+		logger.Info("Processing background task", "task_data", taskData)
+		time.Sleep(500 * time.Millisecond)
+		logger.Info("Background task completed", "task_data", taskData)
+	}
+}
+
+func publishTask(taskType string, payload any) {
+	data, _ := json.Marshal(map[string]any{
+		"type":    taskType,
+		"payload": payload,
+		"time":    time.Now().Format(time.RFC3339),
+	})
+	err := rdb.RPush(ctx, taskQueue, data).Err()
+	if err != nil {
+		logger.Error("Failed to publish task to Redis", "error", err)
+	}
+}
+
+func main() {
+	setupLogger()
+	initDB()
+	initRedis()
+
+	go startTaskWorker()
+
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
+		c.Next()
+		logger.Info("HTTP Request",
+			"method", c.Request.Method,
+			"path", path,
+			"status", c.Writer.Status(),
+			"duration", time.Since(start).String(),
+			"ip", c.ClientIP(),
+		)
+	})
+
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status": "healthy",
+			"redis":  rdb.Ping(ctx).Err() == nil,
+		})
+	})
 
 	api := r.Group("/")
 	api.Use(authMiddleware())
@@ -162,13 +271,57 @@ func main() {
 		api.POST("/:id/generate", generateTournament)
 		api.POST("/:id/promote", promoteToKnockout)
 		api.GET("/:id/standings", getStandings)
-		// api.PUT("/matches/:matchId/score", updateMatchScore)
+
+		// Admin only
+		admin := api.Group("/admin")
+		admin.Use(adminOnly())
+		{
+			admin.GET("/logs", getLogs)
+			admin.GET("/mq-stats", getMQStats)
+		}
 	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8082"
 	}
 	r.Run(":" + port)
+}
+
+func adminOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		isAdmin, exists := c.Get("is_admin")
+		if !exists || !isAdmin.(bool) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+func getLogs(c *gin.Context) {
+	data, err := os.ReadFile("logs/tournament-service.log")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not read log file"})
+		return
+	}
+	lines := bytes.Split(data, []byte("\n"))
+	if len(lines) > 1000 {
+		lines = lines[len(lines)-1000:]
+	}
+	c.Data(http.StatusOK, "text/plain", bytes.Join(lines, []byte("\n")))
+}
+
+func getMQStats(c *gin.Context) {
+	len, err := rdb.LLen(ctx, taskQueue).Result()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get MQ stats"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"queue_name":   taskQueue,
+		"queue_length": len,
+	})
 }
 
 func authMiddleware() gin.HandlerFunc {
@@ -186,7 +339,7 @@ func authMiddleware() gin.HandlerFunc {
 		req.Header.Set("Authorization", authHeader)
 		resp, err := (&http.Client{}).Do(req)
 		if err != nil || resp.StatusCode != 200 {
-			log.Printf("Auth verify failed in Tournament: err=%v, status=%v", err, resp.StatusCode)
+			logger.Warn("Auth verify failed in Tournament", "error", err, "status", resp.StatusCode)
 			c.AbortWithStatusJSON(401, gin.H{"error": "Invalid token"})
 			return
 		}
@@ -202,6 +355,7 @@ func authMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
 
 func createTournament(c *gin.Context) {
 	var input struct {
@@ -594,6 +748,26 @@ func calculateGroupStandings(teams []Team, matches []Match, gn string) []Standin
 		t1.GD = t1.GF - t1.GA
 		t2.GD = t2.GF - t2.GA
 	}
+
+	// Find next opponent
+	for _, s := range stMap {
+		for _, m := range matches {
+			if m.Status == "scheduled" && !m.IsPlayed {
+				if m.Team1ID == s.TeamID {
+					if opp, ok := stMap[m.Team2ID]; ok {
+						s.NextOpponent = opp.TeamName
+						break
+					}
+				} else if m.Team2ID == s.TeamID {
+					if opp, ok := stMap[m.Team1ID]; ok {
+						s.NextOpponent = opp.TeamName
+						break
+					}
+				}
+			}
+		}
+	}
+
 	var out []Standing
 	for _, s := range stMap {
 		out = append(out, *s)
@@ -602,17 +776,18 @@ func calculateGroupStandings(teams []Team, matches []Match, gn string) []Standin
 }
 
 type Standing struct {
-	TeamID    uuid.UUID `json:"team_id"`
-	TeamName  string    `json:"team_name"`
-	GroupName string    `json:"group_name"`
-	Played    int       `json:"played"`
-	Wins      int       `json:"wins"`
-	Draws     int       `json:"draws"`
-	Losses    int       `json:"losses"`
-	GF        int       `json:"gf"`
-	GA        int       `json:"ga"`
-	GD        int       `json:"gd"`
-	Points    int       `json:"points"`
+	TeamID       uuid.UUID `json:"team_id"`
+	TeamName     string    `json:"team_name"`
+	GroupName    string    `json:"group_name"`
+	Played       int       `json:"played"`
+	Wins         int       `json:"wins"`
+	Draws        int       `json:"draws"`
+	Losses       int       `json:"losses"`
+	GF           int       `json:"gf"`
+	GA           int       `json:"ga"`
+	GD           int       `json:"gd"`
+	Points       int       `json:"points"`
+	NextOpponent string    `json:"next_opponent"`
 }
 
 func generateTournament(c *gin.Context) {

@@ -253,6 +253,17 @@ const TournamentsPage = () => {
                           }
                         />
                       </div>
+                      <div className="space-y-3">
+                        <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Top N to Advance</Label>
+                        <Input
+                          type="number"
+                          className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs"
+                          value={formData.promote_count}
+                          onChange={(e) =>
+                            setFormData({ ...formData, promote_count: e.target.value })
+                          }
+                        />
+                      </div>
                     </>
                   )}
 

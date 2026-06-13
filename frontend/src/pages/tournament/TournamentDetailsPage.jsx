@@ -22,6 +22,9 @@ import {
   ShieldCheck,
   Activity,
   Award,
+  Settings,
+  Bot,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +52,14 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const TournamentDetailsPage = () => {
   const { id } = useParams();
@@ -80,12 +91,33 @@ const TournamentDetailsPage = () => {
   const [editScore1, setEditScore1] = useState(0);
   const [editScore2, setEditScore2] = useState(0);
 
+  const [settingsData, setSettingsData] = useState({
+    name: "",
+    description: "",
+    simulation_enabled: false,
+    is_public: true,
+    max_teams: 8,
+    group_count: 2,
+    teams_per_group: 4,
+    mode: "self",
+  });
+
   const wsMessage = useWebSocket(id);
 
   const fetchTournament = async () => {
     try {
       const res = await api.get(`/tournaments/${id}`);
       setTournament(res.data);
+      setSettingsData({
+        name: res.data.name,
+        description: res.data.description || "",
+        simulation_enabled: res.data.simulation_enabled,
+        is_public: res.data.is_public,
+        max_teams: res.data.max_teams,
+        group_count: res.data.group_count,
+        teams_per_group: res.data.teams_per_group,
+        mode: res.data.mode,
+      });
     } catch (err) {
       console.error(err);
     }
@@ -150,6 +182,48 @@ const TournamentDetailsPage = () => {
       alert(
         `Failed to update score: ${err.response?.data?.error || err.message}`,
       );
+    }
+  };
+
+  const handleSimulateMatch = async (matchId) => {
+    try {
+      await api.post(`/matches/${matchId}/simulate`);
+      fetchTournament();
+      fetchStandings();
+    } catch (err) {
+      alert("Simulation failed: " + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const handleBulkSimulate = async (stage = null, round = null) => {
+    try {
+      let url = `/matches/tournament/${id}/simulate`;
+      const params = [];
+      if (stage !== null) params.push(`stage=${stage}`);
+      if (round !== null) params.push(`round=${round}`);
+      if (params.length > 0) url += `?${params.join("&")}`;
+
+      await api.post(url);
+      fetchTournament();
+      fetchStandings();
+    } catch (err) {
+      alert("Bulk simulation failed");
+    }
+  };
+
+  const handleUpdateSettings = async (e) => {
+    e.preventDefault();
+    try {
+      await api.put(`/tournaments/${id}`, {
+        ...settingsData,
+        max_teams: parseInt(settingsData.max_teams),
+        group_count: parseInt(settingsData.group_count),
+        teams_per_group: parseInt(settingsData.teams_per_group),
+      });
+      fetchTournament();
+      alert("Settings updated successfully");
+    } catch (err) {
+      alert("Failed to update settings");
     }
   };
 
@@ -339,8 +413,10 @@ const TournamentDetailsPage = () => {
     { id: "news", label: "Comms", icon: Newspaper },
     { id: "info", label: "Intel", icon: ScrollText },
     { id: "live", label: "Stream", icon: Tv },
+    { id: "settings", label: "Settings", icon: Settings },
   ].filter((tab) => {
     if (tab.id === "standings" && tournament?.type === "knockout") return false;
+    if (tab.id === "settings" && !isOwner) return false;
     return true;
   });
 
@@ -374,10 +450,15 @@ const TournamentDetailsPage = () => {
               </span>
             )}
             <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-            <span className="capitalize">Format: {tournament.type}</span>
+            <span className="capitalize">Format: {tournament.type} {tournament.type === 'group' && `(Top ${tournament.promote_count} advance)`}</span>
             <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
             <span className="font-mono text-xs opacity-70">ID: {String(tournament.id || "").split("-")[0]}</span>
           </div>
+          {tournament.description && (
+            <p className="text-sm text-muted-foreground max-w-2xl italic">
+              {tournament.description}
+            </p>
+          )}
         </div>
 
         {isOwner && (
@@ -448,21 +529,45 @@ const TournamentDetailsPage = () => {
                 .reverse()
                 .map((stage) => (
                   <div key={stage} className="space-y-10">
-                    <div className="flex items-center gap-4">
-                       <h2 className="text-2xl font-bold tracking-tight">{stage}</h2>
-                       <div className="h-px flex-1 bg-border" />
+                    <div className="flex items-center justify-between gap-4">
+                       <div className="flex items-center gap-4 flex-1">
+                        <h2 className="text-2xl font-bold tracking-tight">{stage}</h2>
+                        <div className="h-px flex-1 bg-border" />
+                       </div>
+                       {isOwner && stage === "Group Phase" && tournament.simulation_enabled && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-[10px] font-bold uppercase tracking-widest gap-2 h-8 border-primary/20 hover:bg-primary/5 hover:text-primary"
+                            onClick={() => handleBulkSimulate(0)}
+                          >
+                            <Zap size={12} /> Fast Forward Stage
+                          </Button>
+                       )}
                     </div>
                     {Object.keys(groupedMatches[stage])
                       .sort((a, b) => parseInt(a) - parseInt(b))
                       .map((round) => (
                         <div key={round} className="space-y-6">
-                          <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 flex items-center gap-3">
-                            {getRoundName(
-                              parseInt(round),
-                              stage,
-                              Object.keys(groupedMatches[stage]).length,
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60 flex items-center gap-3">
+                              {getRoundName(
+                                parseInt(round),
+                                stage,
+                                Object.keys(groupedMatches[stage]).length,
+                              )}
+                            </h3>
+                            {isOwner && tournament.simulation_enabled && groupedMatches[stage][round].some(m => !m.is_played) && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 text-[9px] font-black uppercase tracking-[0.2em] gap-1.5 opacity-40 hover:opacity-100 hover:text-primary transition-all"
+                                onClick={() => handleBulkSimulate(stage === "Knockout" ? 1 : 0, round)}
+                              >
+                                <Bot size={10} /> Auto-play Matchday
+                              </Button>
                             )}
-                          </h3>
+                          </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {groupedMatches[stage][round].map((match) => {
                               const t1 = tournament.teams.find(
@@ -479,17 +584,16 @@ const TournamentDetailsPage = () => {
                                     "group transition-all hover:shadow-md overflow-hidden",
                                     isOwner && "cursor-pointer border-primary/20 hover:border-primary/40",
                                   )}
-                                  onClick={() => {
-                                    if (isOwner) {
-                                      setEditingMatch(match);
-                                      setEditScore1(match.team1_score);
-                                      setEditScore2(match.team2_score);
-                                      setScoreModalOpen(true);
-                                    }
-                                  }}
                                 >
                                   <div className="p-5 space-y-4">
-                                    <div className="space-y-3">
+                                    <div className="space-y-3" onClick={() => {
+                                      if (isOwner) {
+                                        setEditingMatch(match);
+                                        setEditScore1(match.team1_score);
+                                        setEditScore2(match.team2_score);
+                                        setScoreModalOpen(true);
+                                      }
+                                    }}>
                                       <div className="flex justify-between items-center">
                                         <span
                                           className={cn(
@@ -524,9 +628,24 @@ const TournamentDetailsPage = () => {
                                       </div>
                                     </div>
                                     <div className="pt-4 border-t flex justify-between items-center">
-                                      <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider h-5">
-                                        {match.status}
-                                      </Badge>
+                                      <div className="flex items-center gap-3">
+                                        <Badge variant="outline" className="text-[10px] font-semibold uppercase tracking-wider h-5">
+                                          {match.status}
+                                        </Badge>
+                                        {isOwner && !match.is_played && tournament.simulation_enabled && (
+                                          <Button 
+                                            size="sm" 
+                                            variant="ghost" 
+                                            className="h-6 px-2 text-[10px] font-bold uppercase tracking-widest gap-1 hover:text-primary"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleSimulateMatch(match.id);
+                                            }}
+                                          >
+                                            <Bot size={12} /> Simulate
+                                          </Button>
+                                        )}
+                                      </div>
                                       {match.group_name && (
                                         <span className="text-[10px] font-medium text-muted-foreground">
                                           Sector {match.group_name}
@@ -602,30 +721,63 @@ const TournamentDetailsPage = () => {
                   <div className="border-t">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[50%]">Competitor</TableHead>
-                        <TableHead className="text-center">P</TableHead>
-                        <TableHead className="text-center">GD</TableHead>
-                        <TableHead className="text-center">Pts</TableHead>
+                      <TableRow className="text-[10px] uppercase tracking-widest opacity-70">
+                        <TableHead className="w-[35%]">Competitor</TableHead>
+                        <TableHead className="text-center px-1">P</TableHead>
+                        <TableHead className="text-center px-1">W</TableHead>
+                        <TableHead className="text-center px-1">D</TableHead>
+                        <TableHead className="text-center px-1">L</TableHead>
+                        <TableHead className="text-center px-1">GF</TableHead>
+                        <TableHead className="text-center px-1">GA</TableHead>
+                        <TableHead className="text-center px-1">GD</TableHead>
+                        <TableHead className="text-center px-1">Pts</TableHead>
+                        <TableHead className="text-right pl-4">Next</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {groupedStandings[groupName]
                         .sort((a, b) => b.points - a.points || b.gd - a.gd)
                         .map((s, idx) => (
-                          <TableRow key={s.team_id}>
-                            <TableCell className="font-semibold text-sm">
-                              <span className="text-muted-foreground mr-2 font-mono text-xs">{idx + 1}.</span>
+                          <TableRow key={s.team_id} className={cn(
+                            "text-xs transition-colors hover:bg-muted/50",
+                            idx < tournament.promote_count && "bg-primary/5 border-l-2 border-l-primary"
+                          )}>
+                            <TableCell className="font-semibold py-4">
+                              <span className={cn(
+                                "text-muted-foreground mr-2 font-mono text-[10px]",
+                                idx < tournament.promote_count && "text-primary opacity-100"
+                              )}>{idx + 1}.</span>
                               {s.team_name}
+                              {idx < tournament.promote_count && (
+                                <Badge variant="outline" className="ml-2 py-0 h-4 text-[8px] border-primary/30 text-primary">Qualifying</Badge>
+                              )}
                             </TableCell>
-                            <TableCell className="text-center text-muted-foreground text-xs">
+                            <TableCell className="text-center font-medium opacity-60 px-1">
                               {s.played}
                             </TableCell>
-                            <TableCell className="text-center text-sm font-medium">
+                            <TableCell className="text-center px-1">{s.wins}</TableCell>
+                            <TableCell className="text-center px-1">{s.draws}</TableCell>
+                            <TableCell className="text-center px-1">{s.losses}</TableCell>
+                            <TableCell className="text-center px-1 text-muted-foreground">{s.gf}</TableCell>
+                            <TableCell className="text-center px-1 text-muted-foreground">{s.ga}</TableCell>
+                            <TableCell className={cn(
+                              "text-center font-bold px-1",
+                              s.gd > 0 ? "text-green-600 dark:text-green-400" : s.gd < 0 ? "text-red-600 dark:text-red-400" : ""
+                            )}>
                               {s.gd > 0 ? `+${s.gd}` : s.gd}
                             </TableCell>
-                            <TableCell className="text-center font-bold">
+                            <TableCell className="text-center font-black text-sm px-1">
                               {s.points}
+                            </TableCell>
+                            <TableCell className="text-right pl-4">
+                              {s.next_opponent ? (
+                                <span className="text-[10px] font-bold uppercase tracking-tighter opacity-60 flex items-center justify-end gap-1">
+                                  vs {s.next_opponent}
+                                  <ChevronRight size={10} className="text-primary" />
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold uppercase tracking-tighter opacity-20">—</span>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -973,6 +1125,140 @@ const TournamentDetailsPage = () => {
                 </div>
               )}
             </Card>
+          </div>
+        )}
+
+        {activeTab === "settings" && (
+          <div className="max-w-2xl mx-auto space-y-12">
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold tracking-tight">Arena Configuration</h2>
+              <p className="text-sm text-muted-foreground">Modify the core protocols and visibility of this tournament.</p>
+            </div>
+
+            <form onSubmit={handleUpdateSettings} className="space-y-10">
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Arena Name</Label>
+                  <Input
+                    value={settingsData.name}
+                    onChange={(e) => setSettingsData({ ...settingsData, name: e.target.value })}
+                    className="font-bold tracking-tight text-lg h-12"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Arena Intel (Description)</Label>
+                  <textarea
+                    className="w-full min-h-[120px] p-4 rounded-xl border bg-background text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20"
+                    placeholder="Provide details about this arena..."
+                    value={settingsData.description}
+                    onChange={(e) => setSettingsData({ ...settingsData, description: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2 opacity-60">
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Arena Format</Label>
+                    <Input
+                      value={tournament.type}
+                      className="font-bold tracking-tight text-sm h-12 bg-muted/30 capitalize"
+                      disabled
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Management Mode</Label>
+                    <Select
+                      value={settingsData.mode}
+                      onValueChange={(v) => setSettingsData({ ...settingsData, mode: v })}
+                    >
+                      <SelectTrigger className="h-12 font-bold tracking-tight text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="self" className="text-sm font-bold">Organizer Managed</SelectItem>
+                        <SelectItem value="registration" className="text-sm font-bold">Public Registration</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {tournament.type === "knockout" ? (
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Max Teams</Label>
+                      <Input
+                        type="number"
+                        value={settingsData.max_teams}
+                        onChange={(e) => setSettingsData({ ...settingsData, max_teams: e.target.value })}
+                        className="font-bold tracking-tight text-sm h-12"
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Number of Groups</Label>
+                        <Input
+                          type="number"
+                          value={settingsData.group_count}
+                          onChange={(e) => setSettingsData({ ...settingsData, group_count: e.target.value })}
+                          className="font-bold tracking-tight text-sm h-12"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Teams per Group</Label>
+                        <Input
+                          type="number"
+                          value={settingsData.teams_per_group}
+                          onChange={(e) => setSettingsData({ ...settingsData, teams_per_group: e.target.value })}
+                          className="font-bold tracking-tight text-sm h-12"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="grid gap-6 pt-4">
+                  <div className="flex items-center justify-between p-6 rounded-2xl bg-muted/30 border">
+                    <div className="space-y-1">
+                      <Label className="text-sm font-bold">Public Visibility</Label>
+                      <p className="text-xs text-muted-foreground">Visible to all users in the Global Matrix.</p>
+                    </div>
+                    <Switch
+                      checked={settingsData.is_public}
+                      onCheckedChange={(v) => setSettingsData({ ...settingsData, is_public: v })}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-6 rounded-2xl bg-primary/5 border border-primary/20">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-sm font-bold">Simulation Engine</Label>
+                        <Badge variant="secondary" className="text-[8px] h-4">Beta</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Enable autonomous match simulation (random results).</p>
+                    </div>
+                    <Switch
+                      checked={settingsData.simulation_enabled}
+                      onCheckedChange={(v) => setSettingsData({ ...settingsData, simulation_enabled: v })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t flex flex-col gap-4">
+                <Button type="submit" className="w-full h-12 font-bold uppercase tracking-widest text-xs">
+                  Apply Configurations
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={handleDeleteTournament}
+                  className="w-full h-12 font-bold uppercase tracking-widest text-xs text-destructive hover:bg-destructive/10 border-destructive/20"
+                >
+                  Decommission Arena
+                </Button>
+              </div>
+            </form>
           </div>
         )}
       </div>

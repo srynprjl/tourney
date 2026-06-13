@@ -1,13 +1,20 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -35,8 +42,39 @@ type Application struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-var db *gorm.DB
-var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
+var (
+	db        *gorm.DB
+	rdb       *redis.Client
+	ctx       = context.Background()
+	jwtSecret = []byte(os.Getenv("JWT_SECRET"))
+	logger    *slog.Logger
+)
+
+const (
+	taskQueue = "auth_tasks"
+)
+
+func setupLogger() {
+	// Create logs directory if it doesn't exist
+	if err := os.MkdirAll("logs", 0755); err != nil {
+		log.Fatalf("failed to create log directory: %v", err)
+	}
+
+	logFile, err := os.OpenFile("logs/auth-service.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("failed to open log file: %v", err)
+	}
+
+	// MultiWriter to log to both stdout and file
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+
+	// Create slog logger with JSON handler
+	logger = slog.New(slog.NewJSONHandler(multiWriter, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	
+	slog.SetDefault(logger)
+}
 
 func initDB() {
 	dbURL := os.Getenv("DB_URL")
@@ -50,12 +88,13 @@ func initDB() {
 		if err == nil {
 			break
 		}
-		log.Printf("Failed to connect to database (attempt %d): %v", i+1, err)
+		logger.Warn("Failed to connect to database", "attempt", i+1, "error", err)
 		time.Sleep(2 * time.Second)
 	}
 
 	if err != nil {
-		log.Fatal("Could not connect to database after retries:", err)
+		logger.Error("Could not connect to database after retries", "error", err)
+		os.Exit(1)
 	}
 
 	db.AutoMigrate(&User{}, &Application{})
@@ -70,7 +109,62 @@ func initDB() {
 			IsAdmin:  true,
 		}
 		db.Create(&adminUser)
-		log.Println("Default admin account created (username: admin, password: admin)")
+		logger.Info("Default admin account created", "username", "admin")
+	}
+}
+
+func initRedis() {
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		redisURL = "localhost:6379"
+	}
+	rdb = redis.NewClient(&redis.Options{
+		Addr: redisURL,
+	})
+	
+	// Test connection
+	for i := 0; i < 5; i++ {
+		err := rdb.Ping(ctx).Err()
+		if err == nil {
+			logger.Info("Connected to Redis")
+			return
+		}
+		logger.Warn("Failed to connect to Redis", "attempt", i+1, "error", err)
+		time.Sleep(2 * time.Second)
+	}
+}
+
+// Simple Task Queue Worker
+func startTaskWorker() {
+	logger.Info("Starting background task worker")
+	for {
+		// BLPOP blocks until an element is available in the list
+		result, err := rdb.BLPop(ctx, 0, taskQueue).Result()
+		if err != nil {
+			logger.Error("Error popping task from queue", "error", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		// result[0] is the key, result[1] is the value
+		taskData := result[1]
+		logger.Info("Processing background task", "task_data", taskData)
+
+		// Simulate work
+		time.Sleep(500 * time.Millisecond)
+		logger.Info("Background task completed", "task_data", taskData)
+	}
+}
+
+func publishTask(taskType string, payload any) {
+	data, _ := json.Marshal(map[string]any{
+		"type":    taskType,
+		"payload": payload,
+		"time":    time.Now().Format(time.RFC3339),
+	})
+	err := rdb.RPush(ctx, taskQueue, data).Err()
+	if err != nil {
+		logger.Error("Failed to publish task to Redis", "error", err)
 	}
 }
 
@@ -117,14 +211,42 @@ func adminAuthMiddleware() gin.HandlerFunc {
 }
 
 func main() {
+	setupLogger()
 	initDB()
+	initRedis()
 
-	r := gin.Default()
+	// Start background worker
+	go startTaskWorker()
+
+	// Set Gin to release mode if needed
+	// gin.SetMode(gin.ReleaseMode)
+	
+	r := gin.New()
+	// Use custom logger middleware for Gin
+	r.Use(gin.Recovery())
+	r.Use(func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
+		c.Next()
+		logger.Info("HTTP Request",
+			"method", c.Request.Method,
+			"path", path,
+			"status", c.Writer.Status(),
+			"duration", time.Since(start).String(),
+			"ip", c.ClientIP(),
+		)
+	})
 
 	r.POST("/register", register)
 	r.POST("/login", login)
 	r.GET("/verify", verifyToken)
-	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "healthy"}) })
+	r.GET("/health", func(c *gin.Context) { 
+		c.JSON(200, gin.H{
+			"status": "healthy",
+			"db": "connected",
+			"redis": rdb.Ping(ctx).Err() == nil,
+		}) 
+	})
 
 	// Admin endpoints
 	adminGroup := r.Group("/admin")
@@ -135,6 +257,8 @@ func main() {
 		adminGroup.PUT("/users/:id/toggle-admin", toggleAdmin)
 		adminGroup.PUT("/users/:id/toggle-ban", toggleBan)
 		adminGroup.GET("/stats", getStats)
+		adminGroup.GET("/logs", getLogs)
+		adminGroup.GET("/mq-stats", getMQStats)
 	}
 
 	port := os.Getenv("PORT")
@@ -142,6 +266,7 @@ func main() {
 		port = "8081"
 	}
 
+	logger.Info("Starting auth-service", "port", port)
 	r.Run(":" + port)
 }
 
@@ -158,6 +283,7 @@ func register(c *gin.Context) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
+		logger.Error("Password hashing failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
 		return
 	}
@@ -172,6 +298,13 @@ func register(c *gin.Context) {
 		return
 	}
 
+	// Queue a background task (e.g., welcome email, analytics)
+	publishTask("user_registration", map[string]any{
+		"username": user.Username,
+		"user_id":  user.ID,
+	})
+
+	logger.Info("User registered", "username", user.Username, "id", user.ID)
 	c.JSON(http.StatusCreated, gin.H{"message": "User created successfully"})
 }
 
@@ -188,16 +321,19 @@ func login(c *gin.Context) {
 
 	var user User
 	if err := db.Where("username = ?", input.Username).First(&user).Error; err != nil {
+		logger.Warn("Login failed: user not found", "username", input.Username)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
+		logger.Warn("Login failed: incorrect password", "username", input.Username)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
 		return
 	}
 
 	if user.IsBanned {
+		logger.Warn("Login failed: user banned", "username", input.Username)
 		c.JSON(http.StatusForbidden, gin.H{"error": "Account suspended"})
 		return
 	}
@@ -211,10 +347,19 @@ func login(c *gin.Context) {
 
 	tokenString, err := token.SignedString(jwtSecret)
 	if err != nil {
+		logger.Error("Token generation failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
 	}
 
+	// Queue an analytics task
+	publishTask("user_login", map[string]any{
+		"username": user.Username,
+		"user_id":  user.ID,
+		"ip":       c.ClientIP(),
+	})
+
+	logger.Info("User logged in", "username", user.Username, "id", user.ID)
 	c.JSON(http.StatusOK, gin.H{"token": tokenString})
 }
 
@@ -225,7 +370,6 @@ func verifyToken(c *gin.Context) {
 		return
 	}
 
-	// Remove "Bearer " prefix if present
 	if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
 		tokenString = tokenString[7:]
 	}
@@ -245,8 +389,27 @@ func verifyToken(c *gin.Context) {
 		return
 	}
 
-	var user User
-	if err := db.First(&user, claims["user_id"]).Error; err == nil && user.IsBanned {
+	userID := uint(claims["user_id"].(float64))
+	
+	// Check Redis for banned status
+	bannedKey := fmt.Sprintf("user:%d:banned", userID)
+	isBanned, err := rdb.Get(ctx, bannedKey).Result()
+	
+	if err == redis.Nil {
+		// Cache miss, check DB
+		var user User
+		if err := db.First(&user, userID).Error; err == nil {
+			// Cache the result for 10 minutes
+			status := "0"
+			if user.IsBanned { status = "1" }
+			rdb.Set(ctx, bannedKey, status, 10*time.Minute)
+			
+			if user.IsBanned {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Account suspended"})
+				return
+			}
+		}
+	} else if err == nil && isBanned == "1" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Account suspended"})
 		return
 	}
@@ -270,6 +433,9 @@ func deleteUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
 		return
 	}
+	// Invalidate cache
+	rdb.Del(ctx, fmt.Sprintf("user:%s:banned", userID))
+	
 	c.JSON(http.StatusOK, gin.H{"message": "User deleted"})
 }
 
@@ -302,6 +468,13 @@ func toggleBan(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
 		return
 	}
+	
+	// Update Redis cache immediately
+	bannedKey := fmt.Sprintf("user:%d:banned", user.ID)
+	status := "0"
+	if user.IsBanned { status = "1" }
+	rdb.Set(ctx, bannedKey, status, 10*time.Minute)
+	
 	c.JSON(http.StatusOK, gin.H{"message": "Ban status updated", "is_banned": user.IsBanned})
 }
 
@@ -318,33 +491,28 @@ func getStats(c *gin.Context) {
 	})
 }
 
-// d
-// 	var existing Application
-// 	if err := db.Where("username = ? OR email = ?", input.Username, input.Email).First(&existing).Error; err == nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Application already submitted for this username or email"})
-// 		return
-// 	}
+func getLogs(c *gin.Context) {
+	data, err := os.ReadFile("logs/auth-service.log")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not read log file"})
+		return
+	}
+	// Return last 1000 lines or so to prevent overloading the browser
+	lines := bytes.Split(data, []byte("\n"))
+	if len(lines) > 1000 {
+		lines = lines[len(lines)-1000:]
+	}
+	c.Data(http.StatusOK, "text/plain", bytes.Join(lines, []byte("\n")))
+}
 
-// 	// Check if user already exists
-// 	var existingUser User
-// 	if err := db.Where("username = ?", input.Username).First(&existingUser).Error; err == nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Username already taken"})
-// 		return
-// 	}
-
-// 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
-// 	app := Application{
-// 		Username:  input.Username,
-// 		Password:  string(hashedPassword),
-// 		Email:     input.Email,
-// 		Reason:    input.Reason,
-// 		CreatedAt: time.Now(),
-// 	}
-
-// 	if err := db.Create(&app).Error; err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit application"})
-// 		return
-// 	}
-
-// 	c.JSON(http.StatusCreated, gin.H{"message": "Application submitted successfully"})
-// }
+func getMQStats(c *gin.Context) {
+	len, err := rdb.LLen(ctx, taskQueue).Result()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get MQ stats"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"queue_name":   taskQueue,
+		"queue_length": len,
+	})
+}
