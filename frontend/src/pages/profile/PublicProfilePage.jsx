@@ -1,41 +1,12 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "@/services/api";
-import {
-  User,
-  Award,
-  History,
-  Globe,
-  MapPin,
-  Trophy,
-  MessageSquare,
-  Shield,
-  Share2,
-  ExternalLink,
-  Calendar,
-  Edit3,
-  Save,
-  X,
-  Plus,
-  Activity,
-  Trash2,
-  Send,
-  Heart,
-} from "lucide-react";
+import { User, Trophy, Edit3, X, Trash2, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 
 // UI Components
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -53,7 +24,6 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 
@@ -201,12 +171,14 @@ const PublicProfilePage = () => {
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 pb-10 border-b">
         <div className="flex items-start gap-8">
           <div className="w-32 h-32 border-2 border-primary flex items-center justify-center shrink-0">
-             <User size={48} strokeWidth={2.5} />
+            <User size={48} strokeWidth={2.5} />
           </div>
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-primary" />
-              <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">User Profile</span>
+              <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">
+                User Profile
+              </span>
             </div>
             <div className="flex items-center gap-4">
               <h1 className="text-6xl font-bold tracking-tighter uppercase leading-none">
@@ -234,10 +206,14 @@ const PublicProfilePage = () => {
                   className="h-8 w-40 rounded-none border-x-0 border-t-0 border-b px-0 focus-visible:ring-0 uppercase font-bold"
                 />
               ) : (
-                <span className="opacity-60">{profile.location || "GLOBAL"}</span>
+                <span className="opacity-60">
+                  {profile.location || "GLOBAL"}
+                </span>
               )}
               <span className="opacity-20">//</span>
               <span className="text-primary opacity-100">COMPETITOR</span>
+              <span className="opacity-20">//</span>
+              <span className="font-black text-primary">RATING {profile.rating || 1200}</span>
             </div>
           </div>
         </div>
@@ -256,7 +232,9 @@ const PublicProfilePage = () => {
         {/* Sidebar Stats */}
         <div className="lg:col-span-4 space-y-12">
           <section className="space-y-6">
-            <h2 className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 border-b pb-4">About</h2>
+            <h2 className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 border-b pb-4">
+              About
+            </h2>
             <div className="p-0">
               {isEditing ? (
                 <textarea
@@ -268,8 +246,7 @@ const PublicProfilePage = () => {
                 />
               ) : (
                 <p className="text-[10px] font-bold uppercase tracking-widest leading-loose opacity-60">
-                  {profile.bio ||
-                    "No biography provided."}
+                  {profile.bio || "No biography provided."}
                 </p>
               )}
             </div>
@@ -280,7 +257,9 @@ const PublicProfilePage = () => {
         <div className="lg:col-span-8 space-y-20">
           <section className="space-y-12">
             <div className="flex justify-between items-end border-b pb-6">
-              <h2 className="text-xs font-black uppercase tracking-[0.4em] opacity-40">Achievements</h2>
+              <h2 className="text-xs font-black uppercase tracking-[0.4em] opacity-40">
+                Achievements
+              </h2>
               {isOwnProfile && (
                 <Dialog open={awardModalOpen} onOpenChange={setAwardModalOpen}>
                   <DialogTrigger asChild>
@@ -293,14 +272,18 @@ const PublicProfilePage = () => {
                   </DialogTrigger>
                   <DialogContent className="border-0 rounded-none p-10">
                     <DialogHeader className="space-y-6">
-                      <DialogTitle className="text-3xl font-bold uppercase tracking-tighter">New Award</DialogTitle>
+                      <DialogTitle className="text-3xl font-bold uppercase tracking-tighter">
+                        New Award
+                      </DialogTitle>
                       <DialogDescription className="text-[10px] font-bold uppercase tracking-widest opacity-60">
                         Record a new achievement.
                       </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleAddAward} className="space-y-8 pt-8">
                       <div className="space-y-3">
-                        <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Award Title</Label>
+                        <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">
+                          Award Title
+                        </Label>
                         <Input
                           placeholder="E.G. MVP"
                           className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs uppercase"
@@ -312,7 +295,9 @@ const PublicProfilePage = () => {
                         />
                       </div>
                       <div className="space-y-3">
-                        <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Context</Label>
+                        <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">
+                          Context
+                        </Label>
                         <Input
                           placeholder="E.G. PRO LEAGUE"
                           className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs uppercase"
@@ -326,13 +311,18 @@ const PublicProfilePage = () => {
                           required
                         />
                       </div>
-                      <Button type="submit" className="w-full font-black uppercase tracking-widest text-[10px] h-14">Commit Award</Button>
+                      <Button
+                        type="submit"
+                        className="w-full font-black uppercase tracking-widest text-[10px] h-14"
+                      >
+                        Commit Award
+                      </Button>
                     </form>
                   </DialogContent>
                 </Dialog>
               )}
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border-t border-l">
               {profile.awards?.map((award, i) => (
                 <div
@@ -341,12 +331,21 @@ const PublicProfilePage = () => {
                 >
                   <div className="flex flex-col space-y-8">
                     <div className="flex items-center justify-between">
-                       <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20">Award {String(i + 1).padStart(2, '0')}</span>
-                       <Trophy className="opacity-20 group-hover:opacity-100 transition-opacity" size={16} />
+                      <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-20">
+                        Award {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <Trophy
+                        className="opacity-20 group-hover:opacity-100 transition-opacity"
+                        size={16}
+                      />
                     </div>
                     <div className="space-y-2">
-                       <h3 className="text-2xl font-bold uppercase tracking-tighter leading-none">{award.title}</h3>
-                       <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest opacity-40">{award.description}</p>
+                      <h3 className="text-2xl font-bold uppercase tracking-tighter leading-none">
+                        {award.title}
+                      </h3>
+                      <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest opacity-40">
+                        {award.description}
+                      </p>
                     </div>
                   </div>
                   {isOwnProfile && (
@@ -363,21 +362,31 @@ const PublicProfilePage = () => {
               ))}
               {(!profile.awards || profile.awards.length === 0) && (
                 <div className="col-span-full py-20 text-center border-b border-r">
-                   <h3 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30">No recorded awards</h3>
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30">
+                    No recorded awards
+                  </h3>
                 </div>
               )}
             </div>
           </section>
 
           <section className="space-y-12">
-            <h2 className="text-xs font-black uppercase tracking-[0.4em] opacity-40 border-b pb-6">History</h2>
+            <h2 className="text-xs font-black uppercase tracking-[0.4em] opacity-40 border-b pb-6">
+              History
+            </h2>
             <div className="border-t border-l">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-background hover:bg-background border-none h-16">
-                    <TableHead className="pl-8 uppercase font-black text-[10px] tracking-widest border-r border-b">Competition</TableHead>
-                    <TableHead className="uppercase font-black text-[10px] tracking-widest border-r border-b">Type</TableHead>
-                    <TableHead className="text-right pr-8 uppercase font-black text-[10px] tracking-widest border-r border-b">Status</TableHead>
+                    <TableHead className="pl-8 uppercase font-black text-[10px] tracking-widest border-r border-b">
+                      Competition
+                    </TableHead>
+                    <TableHead className="uppercase font-black text-[10px] tracking-widest border-r border-b">
+                      Type
+                    </TableHead>
+                    <TableHead className="text-right pr-8 uppercase font-black text-[10px] tracking-widest border-r border-b">
+                      Status
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -390,10 +399,14 @@ const PublicProfilePage = () => {
                       }
                     >
                       <TableCell className="pl-8 border-r border-b">
-                         <div className="space-y-1">
-                            <span className="font-bold text-lg tracking-tighter uppercase leading-none">{h.name}</span>
-                            <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest opacity-40">{h.sport}</p>
-                         </div>
+                        <div className="space-y-1">
+                          <span className="font-bold text-lg tracking-tighter uppercase leading-none">
+                            {h.name}
+                          </span>
+                          <p className="text-[8px] font-black text-muted-foreground uppercase tracking-widest opacity-40">
+                            {h.sport}
+                          </p>
+                        </div>
                       </TableCell>
                       <TableCell className="border-r border-b">
                         <span className="text-[8px] font-black uppercase tracking-widest opacity-60">
@@ -413,7 +426,9 @@ const PublicProfilePage = () => {
                         colSpan={3}
                         className="py-16 text-center border-r border-b"
                       >
-                         <h3 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30">No active arenas</h3>
+                        <h3 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30">
+                          No active arenas
+                        </h3>
                       </TableCell>
                     </TableRow>
                   )}
@@ -423,7 +438,9 @@ const PublicProfilePage = () => {
           </section>
 
           <section className="space-y-12">
-            <h2 className="text-xs font-black uppercase tracking-[0.4em] opacity-40 border-b pb-6">Feed</h2>
+            <h2 className="text-xs font-black uppercase tracking-[0.4em] opacity-40 border-b pb-6">
+              Feed
+            </h2>
             <div className="space-y-16">
               <div className="space-y-6">
                 <textarea
@@ -450,7 +467,9 @@ const PublicProfilePage = () => {
                   >
                     <div className="flex justify-between items-start mb-8">
                       <div className="flex items-center gap-4">
-                        <span className="text-[8px] font-black uppercase tracking-[0.4em] opacity-20">{String(i + 1).padStart(2, '0')}</span>
+                        <span className="text-[8px] font-black uppercase tracking-[0.4em] opacity-20">
+                          {String(i + 1).padStart(2, "0")}
+                        </span>
                         <div>
                           <Link
                             to={`/player/${comment.author}`}
@@ -485,11 +504,19 @@ const PublicProfilePage = () => {
                         size="sm"
                         className={cn(
                           "h-auto p-0 font-black text-[8px] tracking-[0.3em] uppercase hover:bg-transparent",
-                          comment.is_liked ? "text-primary" : "text-muted-foreground opacity-40 hover:opacity-100"
+                          comment.is_liked
+                            ? "text-primary"
+                            : "text-muted-foreground opacity-40 hover:opacity-100",
                         )}
                         onClick={() => handleToggleLike(comment.id)}
                       >
-                        <Heart size={10} className={cn("mr-2", comment.is_liked ? "fill-current" : "")} />
+                        <Heart
+                          size={10}
+                          className={cn(
+                            "mr-2",
+                            comment.is_liked ? "fill-current" : "",
+                          )}
+                        />
                         {comment.likes_count || 0} APPRECIATION
                       </Button>
                     </div>
@@ -497,7 +524,9 @@ const PublicProfilePage = () => {
                 ))}
                 {comments.length === 0 && (
                   <div className="py-20 text-center border-r border-b">
-                     <h3 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30">No messages</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.5em] opacity-30">
+                      No messages
+                    </h3>
                   </div>
                 )}
               </div>

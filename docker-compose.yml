@@ -1,106 +1,249 @@
-version: '3.8'
+version: "3.8"
+
+x-shared-env: &shared-env
+  REDIS_URL: redis:6379
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  SQS_ENDPOINT: http://localstack:4566
 
 services:
   # Databases
   db-auth:
     image: postgres:15-alpine
-    environment: [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=auth_db]
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: auth_db
     volumes: [auth_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d auth_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   db-tournament:
     image: postgres:15-alpine
-    environment: [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=tournament_db]
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: tournament_db
     volumes: [tournament_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d tournament_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   db-team:
     image: postgres:15-alpine
-    environment: [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=team_db]
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: team_db
     volumes: [team_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d team_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   db-match:
     image: postgres:15-alpine
-    environment: [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=match_db]
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: match_db
     volumes: [match_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d match_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   db-profile:
     image: postgres:15-alpine
-    environment: [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=profile_db]
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: profile_db
     volumes: [profile_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d profile_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  # API Gateway
-  api-gateway:
-    build: ./api-gateway
-    ports: ["8080:80"]
-    depends_on:
-      - auth-service
-      - tournament-service
-      - match-service
-      - team-service
-      - profile-service
-      - realtime-service
+  localstack:
+    image: localstack/localstack
+    ports: ["4566:4566"]
+    environment:
+      SERVICES: sqs
+      LOCALSTACK_AUTH_TOKEN: ${LOCALSTACK_TOKEN}
+      DEFAULT_REGION: us-east-1
+      HOSTNAME_EXTERNAL: localstack
+    healthcheck:
+      test: ["CMD", "curl", "-s", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   # Services
   auth-service:
     build: ./services/auth-service
     environment:
-      - DB_URL=postgres://user:password@db-auth:5432/auth_db?sslmode=disable
-      - JWT_SECRET=your_jwt_secret
-      - REDIS_URL=redis:6379
-    depends_on: [db-auth, redis]
+      <<: *shared-env
+      DB_URL: postgres://${DB_USER}:${DB_PASSWORD}@db-auth:5432/auth_db?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      db-auth:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
 
   tournament-service:
     build: ./services/tournament-service
     environment:
-      - DB_URL=postgres://user:password@db-tournament:5432/tournament_db?sslmode=disable
-      - AUTH_SERVICE_URL=http://auth-service:8081
-      - TEAM_SERVICE_URL=http://team-service:8084
-      - MATCH_SERVICE_URL=http://match-service:8083
-      - REDIS_URL=redis:6379
-    depends_on: [db-tournament, auth-service, redis]
+      <<: *shared-env
+      DB_URL: postgres://${DB_USER}:${DB_PASSWORD}@db-tournament:5432/tournament_db?sslmode=disable
+      AUTH_SERVICE_URL: ${AUTH_URL}
+      TEAM_SERVICE_URL: ${TEAM_URL}
+      MATCH_SERVICE_URL: ${MATCH_URL}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      db-tournament:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
 
   match-service:
     build: ./services/match-service
     environment:
-      - DB_URL=postgres://user:password@db-match:5432/match_db?sslmode=disable
-      - TOURNAMENT_SERVICE_URL=http://tournament-service:8082
-      - AUTH_SERVICE_URL=http://auth-service:8081
-      - REALTIME_SERVICE_URL=http://realtime-service:8087
-      - REDIS_URL=redis:6379
-    depends_on: [db-match, tournament-service, redis]
+      <<: *shared-env
+      DB_URL: postgres://${DB_USER}:${DB_PASSWORD}@db-match:5432/match_db?sslmode=disable
+      TOURNAMENT_SERVICE_URL: ${TOURNAMENT_URL}
+      AUTH_SERVICE_URL: ${AUTH_URL}
+      REALTIME_SERVICE_URL: ${REALTIME_URL}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      db-match:
+        condition: service_healthy
+      tournament-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
 
   team-service:
     build: ./services/team-service
     environment:
-      - DB_URL=postgres://user:password@db-team:5432/team_db?sslmode=disable
-      - AUTH_SERVICE_URL=http://auth-service:8081
-      - REALTIME_SERVICE_URL=http://realtime-service:8087
-      - REDIS_URL=redis:6379
-    depends_on: [db-team, redis]
+      <<: *shared-env
+      DB_URL: postgres://${DB_USER}:${DB_PASSWORD}@db-team:5432/team_db?sslmode=disable
+      AUTH_SERVICE_URL: ${AUTH_URL}
+      REALTIME_SERVICE_URL: ${REALTIME_URL}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      db-team:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
 
   profile-service:
     build: ./services/profile-service
     environment:
-      - DB_URL=postgres://user:password@db-profile:5432/profile_db?sslmode=disable
-      - AUTH_SERVICE_URL=http://auth-service:8081
-      - REDIS_URL=redis:6379
-    depends_on: [db-profile, redis]
+      <<: *shared-env
+      DB_URL: postgres://${DB_USER}:${DB_PASSWORD}@db-profile:5432/profile_db?sslmode=disable
+      AUTH_SERVICE_URL: ${AUTH_URL}
+      TEAM_SERVICE_URL: ${TEAM_URL}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8086/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      db-profile:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
 
   realtime-service:
     build: ./services/realtime-service
     environment:
-      - REDIS_URL=redis:6379
-    depends_on: [redis]
+      <<: *shared-env
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8087/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+  api-gateway:
+    build: ./api-gateway
+    ports: ["8080:80"]
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      tournament-service:
+        condition: service_healthy
+      match-service:
+        condition: service_healthy
+      team-service:
+        condition: service_healthy
+      profile-service:
+        condition: service_healthy
+      realtime-service:
+        condition: service_healthy
 
   frontend:
     build: ./frontend
     ports: ["3000:80"]
     environment:
-      - VITE_API_URL=http://localhost:8080
-    depends_on: [api-gateway]
+      VITE_API_URL: http://localhost:8080
+    depends_on:
+      api-gateway:
+        condition: service_started
 
 volumes:
   auth_data:

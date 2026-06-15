@@ -13,6 +13,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -63,6 +68,8 @@ type MatchEvent struct {
 var (
 	db        *gorm.DB
 	rdb       *redis.Client
+	sqsClient *sqs.Client
+	queueURL  string
 	ctx       = context.Background()
 	logger    *slog.Logger
 )
@@ -133,38 +140,191 @@ func initRedis() {
 	}
 }
 
+func initSQS() {
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		region = "us-east-1"
+	}
+	endpoint := os.Getenv("SQS_ENDPOINT")
+	accessKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(region),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
+	)
+	if err != nil {
+		logger.Error("Unable to load AWS SDK config", "error", err)
+		os.Exit(1)
+	}
+
+	sqsClient = sqs.NewFromConfig(cfg, func(o *sqs.Options) {
+		if endpoint != "" {
+			o.BaseEndpoint = aws.String(endpoint)
+		}
+	})
+
+	for i := 0; i < 30; i++ {
+		// Auto-create queue if it doesn't exist
+		out, cerr := sqsClient.CreateQueue(ctx, &sqs.CreateQueueInput{
+			QueueName: aws.String(taskQueue),
+		})
+		if cerr == nil {
+			queueURL = *out.QueueUrl
+			logger.Info("SQS initialized", "queue_url", queueURL)
+			return
+		}
+
+		// If it already exists, get the URL
+		gurl, gerr := sqsClient.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{
+			QueueName: aws.String(taskQueue),
+		})
+		if gerr == nil {
+			queueURL = *gurl.QueueUrl
+			logger.Info("SQS initialized", "queue_url", queueURL)
+			return
+		}
+
+		err = cerr // keep track of the creation error
+		logger.Warn("Failed to connect to SQS or create queue", "attempt", i+1, "error", cerr, "gerr", gerr)
+		time.Sleep(2 * time.Second)
+	}
+
+	if err != nil {
+		logger.Error("Could not initialize SQS after retries", "error", err)
+		os.Exit(1)
+	}
+}
+
 func startTaskWorker() {
-	logger.Info("Starting background task worker")
+	logger.Info("Starting background task worker (SQS)")
 	for {
-		result, err := rdb.BLPop(ctx, 0, taskQueue).Result()
+		msgOutput, err := sqsClient.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+			QueueUrl:            aws.String(queueURL),
+			MaxNumberOfMessages: 1,
+			WaitTimeSeconds:     20,
+		})
 		if err != nil {
-			logger.Error("Error popping task from queue", "error", err)
+			logger.Error("Error receiving message from SQS", "error", err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		taskData := result[1]
+
+		if len(msgOutput.Messages) == 0 {
+			continue
+		}
+
+		msg := msgOutput.Messages[0]
+		taskData := *msg.Body
 		logger.Info("Processing background task", "task_data", taskData)
-		time.Sleep(500 * time.Millisecond)
+
+		var task struct {
+			Type    string `json:"type"`
+			Payload any    `json:"payload"`
+		}
+		if err := json.Unmarshal([]byte(taskData), &task); err == nil {
+			if task.Type == "BULK_SIMULATE" {
+				payload := task.Payload.(map[string]any)
+				tid := payload["tournament_id"].(string)
+				authHeader := payload["auth_token"].(string)
+				stage := payload["stage"].(string)
+				round := payload["round"].(string)
+
+				var matches []Match
+				query := db.Where("tournament_id = ? AND is_played = false", tid)
+				if stage != "" {
+					query = query.Where("stage = ?", stage)
+				}
+				if round != "" {
+					query = query.Where("round = ?", round)
+				}
+				query.Find(&matches)
+
+				if len(matches) > 0 {
+					// Fetch tournament context once
+					tourneyURL := os.Getenv("TOURNAMENT_SERVICE_URL")
+					if tourneyURL == "" {
+						tourneyURL = "http://tournament-service:8082"
+					}
+					tReq, _ := http.NewRequest("GET", tourneyURL+"/"+tid, nil)
+					tReq.Header.Set("Authorization", authHeader)
+					tResp, err := (&http.Client{}).Do(tReq)
+
+					var tournament Tournament
+					if err == nil {
+						defer tResp.Body.Close()
+						json.NewDecoder(tResp.Body).Decode(&tournament)
+					}
+
+					for i := range matches {
+						performSimulation(&matches[i], tournament)
+						rdb.Del(ctx, fmt.Sprintf("match:%s", matches[i].ID.String()))
+					}
+					rdb.Del(ctx, fmt.Sprintf("tournament:%s:matches", tid))
+					broadcastUpdate(tid, "match_update", "bulk_simulated")
+					logger.Info("Async bulk simulation completed", "count", len(matches), "tournament_id", tid)
+				}
+			}
+		}
+
+		// Store in completed tasks history in Redis (keep last 50)
+		rdb.LPush(ctx, taskQueue+":completed", taskData)
+		rdb.LTrim(ctx, taskQueue+":completed", 0, 49)
+
+		// Delete message from SQS
+		_, err = sqsClient.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+			QueueUrl:      aws.String(queueURL),
+			ReceiptHandle: msg.ReceiptHandle,
+		})
+		if err != nil {
+			logger.Error("Failed to delete message from SQS", "error", err)
+		}
+
 		logger.Info("Background task completed", "task_data", taskData)
 	}
 }
 
-func publishTask(taskType string, payload any) {
+func publishMatchCompleted(match Match) {
+	winnerID := ""
+	if match.WinnerID != nil {
+		winnerID = match.WinnerID.String()
+	}
+
+	payload := map[string]any{
+		"match_id":      match.ID.String(),
+		"tournament_id": match.TournamentID.String(),
+		"team1_id":      match.Team1ID.String(),
+		"team2_id":      match.Team2ID.String(),
+		"team1_score":   match.Team1Score,
+		"team2_score":   match.Team2Score,
+		"winner_id":     winnerID,
+	}
+	publishTask("MATCH_COMPLETED", payload)
+	rdb.Publish(ctx, "global_activity", fmt.Sprintf("Match result finalized: %d - %d", match.Team1Score, match.Team2Score))
+}
+
+func publishTask(taskType string, payload any) error {
 	data, _ := json.Marshal(map[string]any{
 		"type":    taskType,
 		"payload": payload,
 		"time":    time.Now().Format(time.RFC3339),
 	})
-	err := rdb.RPush(ctx, taskQueue, data).Err()
+	_, err := sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
+		QueueUrl:    aws.String(queueURL),
+		MessageBody: aws.String(string(data)),
+	})
 	if err != nil {
-		logger.Error("Failed to publish task to Redis", "error", err)
+		logger.Error("Failed to publish task to SQS", "error", err)
+		return err
 	}
+	return nil
 }
 
 func main() {
 	setupLogger()
 	initDB()
 	initRedis()
+	initSQS()
 
 	go startTaskWorker()
 
@@ -211,6 +371,7 @@ func main() {
 		{
 			admin.GET("/logs", getLogs)
 			admin.GET("/mq-stats", getMQStats)
+			admin.POST("/trigger-task", triggerTestTask)
 		}
 	}
 
@@ -219,6 +380,30 @@ func main() {
 		port = "8083"
 	}
 	r.Run(":" + port)
+}
+
+func triggerTestTask(c *gin.Context) {
+	var input struct {
+		Type    string `json:"type"`
+		Payload string `json:"payload"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if input.Type == "" {
+		input.Type = "MATCH_SYSTEM_TEST"
+	}
+	if input.Payload == "" {
+		input.Payload = "Manual match task payload generated at " + time.Now().Format(time.RFC822)
+	}
+
+	if err := publishTask(input.Type, input.Payload); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to inject task: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Match task triggered successfully", "type": input.Type})
 }
 
 func listMatchesByTournament(c *gin.Context) {
@@ -296,14 +481,28 @@ func getLogs(c *gin.Context) {
 }
 
 func getMQStats(c *gin.Context) {
-	len, err := rdb.LLen(ctx, taskQueue).Result()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get MQ stats"})
-		return
+	// Get SQS stats
+	attribs, err := sqsClient.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
+		QueueUrl: aws.String(queueURL),
+		AttributeNames: []types.QueueAttributeName{
+			types.QueueAttributeNameApproximateNumberOfMessages,
+			types.QueueAttributeNameApproximateNumberOfMessagesNotVisible,
+		},
+	})
+
+	sqsStats := make(map[string]string)
+	if err == nil {
+		sqsStats = attribs.Attributes
 	}
+
+	// Get last 10 completed tasks from Redis
+	completed, _ := rdb.LRange(ctx, taskQueue+":completed", 0, 9).Result()
+
 	c.JSON(http.StatusOK, gin.H{
 		"queue_name":   taskQueue,
-		"queue_length": len,
+		"sqs_url":      queueURL,
+		"sqs_stats":    sqsStats,
+		"completed":    completed,
 	})
 }
 
@@ -442,6 +641,7 @@ func updateScore(c *gin.Context) {
 	rdb.Del(ctx, fmt.Sprintf("tournament:%s:matches", match.TournamentID.String()))
 
 	broadcastUpdate(match.TournamentID.String(), "match_update", match)
+	publishMatchCompleted(match)
 	c.JSON(http.StatusOK, match)
 }
 
@@ -480,6 +680,7 @@ func simulateMatch(c *gin.Context) {
 	rdb.Del(ctx, fmt.Sprintf("tournament:%s:matches", match.TournamentID.String()))
 
 	broadcastUpdate(match.TournamentID.String(), "match_update", match)
+	publishMatchCompleted(match)
 	c.JSON(http.StatusOK, match)
 }
 
@@ -487,45 +688,16 @@ func bulkSimulateMatches(c *gin.Context) {
 	tid := c.Param("tournamentId")
 	stage := c.Query("stage")
 	round := c.Query("round")
+	authHeader := c.GetHeader("Authorization")
 
-	var matches []Match
-	query := db.Where("tournament_id = ? AND is_played = false", tid)
-	if stage != "" {
-		query = query.Where("stage = ?", stage)
-	}
-	if round != "" {
-		query = query.Where("round = ?", round)
-	}
-	query.Find(&matches)
+	publishTask("BULK_SIMULATE", map[string]string{
+		"tournament_id": tid,
+		"auth_token":    authHeader,
+		"stage":         stage,
+		"round":         round,
+	})
 
-	if len(matches) == 0 {
-		c.JSON(200, gin.H{"message": "No unplayed matches to simulate"})
-		return
-	}
-
-	// Fetch tournament context once
-	tourneyURL := os.Getenv("TOURNAMENT_SERVICE_URL")
-	if tourneyURL == "" {
-		tourneyURL = "http://tournament-service:8082"
-	}
-	tReq, _ := http.NewRequest("GET", tourneyURL+"/"+tid, nil)
-	tReq.Header.Set("Authorization", c.GetHeader("Authorization"))
-	tResp, err := (&http.Client{}).Do(tReq)
-
-	var tournament Tournament
-	if err == nil {
-		defer tResp.Body.Close()
-		json.NewDecoder(tResp.Body).Decode(&tournament)
-	}
-
-	for i := range matches {
-		performSimulation(&matches[i], tournament)
-		rdb.Del(ctx, fmt.Sprintf("match:%s", matches[i].ID.String()))
-	}
-
-	rdb.Del(ctx, fmt.Sprintf("tournament:%s:matches", tid))
-	broadcastUpdate(tid, "match_update", "bulk_simulated")
-	c.JSON(200, gin.H{"message": fmt.Sprintf("Simulated %d matches", len(matches))})
+	c.JSON(200, gin.H{"message": "Bulk simulation queued"})
 }
 
 func performSimulation(match *Match, tournament Tournament) {

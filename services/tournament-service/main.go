@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -13,6 +14,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -121,10 +127,12 @@ type Match struct {
 }
 
 var (
-	db     *gorm.DB
-	rdb    *redis.Client
-	ctx    = context.Background()
-	logger *slog.Logger
+	db        *gorm.DB
+	rdb       *redis.Client
+	sqsClient *sqs.Client
+	queueURL  string
+	ctx       = context.Background()
+	logger    *slog.Logger
 )
 
 const (
@@ -190,38 +198,145 @@ func initRedis() {
 	}
 }
 
+func initSQS() {
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		region = "us-east-1"
+	}
+	endpoint := os.Getenv("SQS_ENDPOINT")
+	accessKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(region),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
+	)
+	if err != nil {
+		logger.Error("Unable to load AWS SDK config", "error", err)
+		os.Exit(1)
+	}
+
+	sqsClient = sqs.NewFromConfig(cfg, func(o *sqs.Options) {
+		if endpoint != "" {
+			o.BaseEndpoint = aws.String(endpoint)
+		}
+	})
+
+	for i := 0; i < 30; i++ {
+		// Auto-create queue if it doesn't exist
+		out, cerr := sqsClient.CreateQueue(ctx, &sqs.CreateQueueInput{
+			QueueName: aws.String(taskQueue),
+		})
+		if cerr == nil {
+			queueURL = *out.QueueUrl
+			logger.Info("SQS initialized", "queue_url", queueURL)
+			return
+		}
+
+		// If it already exists, get the URL
+		gurl, gerr := sqsClient.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{
+			QueueName: aws.String(taskQueue),
+		})
+		if gerr == nil {
+			queueURL = *gurl.QueueUrl
+			logger.Info("SQS initialized", "queue_url", queueURL)
+			return
+		}
+
+		err = cerr // keep track of the creation error
+		logger.Warn("Failed to connect to SQS or create queue", "attempt", i+1, "error", cerr, "gerr", gerr)
+		time.Sleep(2 * time.Second)
+	}
+
+	if err != nil {
+		logger.Error("Could not initialize SQS after retries", "error", err)
+		os.Exit(1)
+	}
+}
+
 func startTaskWorker() {
-	logger.Info("Starting background task worker")
+	logger.Info("Starting background task worker (SQS)")
 	for {
-		result, err := rdb.BLPop(ctx, 0, taskQueue).Result()
+		msgOutput, err := sqsClient.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+			QueueUrl:            aws.String(queueURL),
+			MaxNumberOfMessages: 1,
+			WaitTimeSeconds:     20,
+		})
 		if err != nil {
-			logger.Error("Error popping task from queue", "error", err)
+			logger.Error("Error receiving message from SQS", "error", err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		taskData := result[1]
+
+		if len(msgOutput.Messages) == 0 {
+			continue
+		}
+
+		msg := msgOutput.Messages[0]
+		taskData := *msg.Body
 		logger.Info("Processing background task", "task_data", taskData)
-		time.Sleep(500 * time.Millisecond)
+
+		var task struct {
+			Type    string `json:"type"`
+			Payload any    `json:"payload"`
+		}
+		if err := json.Unmarshal([]byte(taskData), &task); err == nil {
+			if task.Type == "GENERATE_TOURNAMENT" {
+				payload := task.Payload.(map[string]any)
+				tid := payload["tournament_id"].(string)
+				authHeader := payload["auth_token"].(string)
+
+				var t Tournament
+				if err := db.Preload("Teams").First(&t, "id = ?", tid).Error; err == nil {
+					if t.Type == Knockout {
+						generateKOFromTeams(t, t.Teams, authHeader)
+					} else {
+						generateGroupStage(t, authHeader)
+					}
+					logger.Info("Async tournament generation completed", "tournament_id", tid)
+				}
+			}
+		}
+
+		// Store in completed tasks history in Redis (keep last 50)
+		rdb.LPush(ctx, taskQueue+":completed", taskData)
+		rdb.LTrim(ctx, taskQueue+":completed", 0, 49)
+
+		// Delete message from SQS
+		_, err = sqsClient.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+			QueueUrl:      aws.String(queueURL),
+			ReceiptHandle: msg.ReceiptHandle,
+		})
+		if err != nil {
+			logger.Error("Failed to delete message from SQS", "error", err)
+		}
+
 		logger.Info("Background task completed", "task_data", taskData)
 	}
 }
 
-func publishTask(taskType string, payload any) {
+func publishTask(taskType string, payload any) error {
 	data, _ := json.Marshal(map[string]any{
 		"type":    taskType,
 		"payload": payload,
 		"time":    time.Now().Format(time.RFC3339),
 	})
-	err := rdb.RPush(ctx, taskQueue, data).Err()
+	_, err := sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
+		QueueUrl:    aws.String(queueURL),
+		MessageBody: aws.String(string(data)),
+	})
 	if err != nil {
-		logger.Error("Failed to publish task to Redis", "error", err)
+		logger.Error("Failed to publish task to SQS", "error", err)
+		return err
 	}
+	return nil
 }
 
 func main() {
 	setupLogger()
 	initDB()
 	initRedis()
+	initSQS()
 
 	go startTaskWorker()
 
@@ -244,6 +359,7 @@ func main() {
 		c.JSON(200, gin.H{
 			"status": "healthy",
 			"redis":  rdb.Ping(ctx).Err() == nil,
+			"sqs":    sqsClient != nil,
 		})
 	})
 
@@ -278,6 +394,7 @@ func main() {
 		{
 			admin.GET("/logs", getLogs)
 			admin.GET("/mq-stats", getMQStats)
+			admin.POST("/trigger-task", triggerTestTask)
 		}
 	}
 	port := os.Getenv("PORT")
@@ -285,6 +402,30 @@ func main() {
 		port = "8082"
 	}
 	r.Run(":" + port)
+}
+
+func triggerTestTask(c *gin.Context) {
+	var input struct {
+		Type    string `json:"type"`
+		Payload string `json:"payload"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if input.Type == "" {
+		input.Type = "TEST_SYSTEM_TASK"
+	}
+	if input.Payload == "" {
+		input.Payload = "Default test payload generated at " + time.Now().Format(time.RFC822)
+	}
+
+	if err := publishTask(input.Type, input.Payload); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to inject task: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Task triggered successfully", "type": input.Type})
 }
 
 func adminOnly() gin.HandlerFunc {
@@ -313,14 +454,34 @@ func getLogs(c *gin.Context) {
 }
 
 func getMQStats(c *gin.Context) {
-	len, err := rdb.LLen(ctx, taskQueue).Result()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get MQ stats"})
-		return
+	// Get SQS stats
+	attribs, err := sqsClient.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
+		QueueUrl: aws.String(queueURL),
+		AttributeNames: []types.QueueAttributeName{
+			types.QueueAttributeNameApproximateNumberOfMessages,
+			types.QueueAttributeNameApproximateNumberOfMessagesNotVisible,
+		},
+	})
+
+	sqsStats := make(map[string]string)
+	if err == nil {
+		sqsStats = attribs.Attributes
 	}
+
+	queueLen := "0"
+	if val, ok := sqsStats[string(types.QueueAttributeNameApproximateNumberOfMessages)]; ok {
+		queueLen = val
+	}
+
+	// Get last 10 completed tasks from Redis
+	completed, _ := rdb.LRange(ctx, taskQueue+":completed", 0, 9).Result()
+
 	c.JSON(http.StatusOK, gin.H{
 		"queue_name":   taskQueue,
-		"queue_length": len,
+		"queue_length": queueLen,
+		"sqs_url":      queueURL,
+		"sqs_stats":    sqsStats,
+		"completed":    completed,
 	})
 }
 
@@ -386,6 +547,7 @@ func createTournament(c *gin.Context) {
 		CreatorID: uid, JoinCode: uuid.New().String()[:6], CreatedAt: time.Now(),
 	}
 	db.Create(&t)
+	rdb.Publish(ctx, "global_activity", fmt.Sprintf("New tournament arena opened: %s (%s)", t.Name, t.Sport))
 	c.JSON(201, t)
 }
 
@@ -791,15 +953,15 @@ type Standing struct {
 }
 
 func generateTournament(c *gin.Context) {
-	var t Tournament
-	db.Preload("Teams").First(&t, "id = ?", c.Param("id"))
+	id := c.Param("id")
 	authHeader := c.GetHeader("Authorization")
-	if t.Type == Knockout {
-		generateKOFromTeams(t, t.Teams, authHeader)
-	} else {
-		generateGroupStage(t, authHeader)
-	}
-	c.JSON(200, gin.H{"message": "Generated"})
+
+	publishTask("GENERATE_TOURNAMENT", map[string]string{
+		"tournament_id": id,
+		"auth_token":    authHeader,
+	})
+
+	c.JSON(200, gin.H{"message": "Tournament generation queued"})
 }
 
 func pushMatches(matches []Match, authHeader string) {

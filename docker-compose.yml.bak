@@ -1,0 +1,153 @@
+version: "3.8"
+
+services:
+  # Databases
+  db-auth:
+    image: postgres:15-alpine
+    environment:
+      [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=auth_db]
+    volumes: [auth_data:/var/lib/postgresql/data]
+
+  db-tournament:
+    image: postgres:15-alpine
+    environment:
+      [
+        POSTGRES_USER=user,
+        POSTGRES_PASSWORD=password,
+        POSTGRES_DB=tournament_db,
+      ]
+    volumes: [tournament_data:/var/lib/postgresql/data]
+
+  db-team:
+    image: postgres:15-alpine
+    environment:
+      [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=team_db]
+    volumes: [team_data:/var/lib/postgresql/data]
+
+  db-match:
+    image: postgres:15-alpine
+    environment:
+      [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=match_db]
+    volumes: [match_data:/var/lib/postgresql/data]
+
+  db-profile:
+    image: postgres:15-alpine
+    environment:
+      [POSTGRES_USER=user, POSTGRES_PASSWORD=password, POSTGRES_DB=profile_db]
+    volumes: [profile_data:/var/lib/postgresql/data]
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  localstack:
+    image: localstack/localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=sqs
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_TOKEN}
+      - DEFAULT_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+
+  # API Gateway
+  api-gateway:
+    build: ./api-gateway
+    ports: ["8080:80"]
+    depends_on:
+      - auth-service
+      - tournament-service
+      - match-service
+      - team-service
+      - profile-service
+      - realtime-service
+
+  # Services
+  auth-service:
+    build: ./services/auth-service
+    environment:
+      - DB_URL=postgres://user:password@db-auth:5432/auth_db?sslmode=disable
+      - JWT_SECRET=${JWT_SECRET}
+      - REDIS_URL=redis:6379
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - SQS_ENDPOINT=http://localstack:4566
+    depends_on: [db-auth, redis, localstack]
+
+  tournament-service:
+    build: ./services/tournament-service
+    environment:
+      - DB_URL=postgres://user:password@db-tournament:5432/tournament_db?sslmode=disable
+      - AUTH_SERVICE_URL=http://auth-service:8081
+      - TEAM_SERVICE_URL=http://team-service:8084
+      - MATCH_SERVICE_URL=http://match-service:8083
+      - REDIS_URL=redis:6379
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - SQS_ENDPOINT=http://localstack:4566
+    depends_on: [db-tournament, auth-service, redis, localstack]
+
+  match-service:
+    build: ./services/match-service
+    environment:
+      - DB_URL=postgres://user:password@db-match:5432/match_db?sslmode=disable
+      - TOURNAMENT_SERVICE_URL=http://tournament-service:8082
+      - AUTH_SERVICE_URL=http://auth-service:8081
+      - REALTIME_SERVICE_URL=http://realtime-service:8087
+      - REDIS_URL=redis:6379
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - SQS_ENDPOINT=http://localstack:4566
+    depends_on: [db-match, tournament-service, redis, localstack]
+
+  team-service:
+    build: ./services/team-service
+    environment:
+      - DB_URL=postgres://user:password@db-team:5432/team_db?sslmode=disable
+      - AUTH_SERVICE_URL=http://auth-service:8081
+      - REALTIME_SERVICE_URL=http://realtime-service:8087
+      - REDIS_URL=redis:6379
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - SQS_ENDPOINT=http://localstack:4566
+    depends_on: [db-team, redis, localstack]
+
+  profile-service:
+    build: ./services/profile-service
+    environment:
+      - DB_URL=postgres://user:password@db-profile:5432/profile_db?sslmode=disable
+      - AUTH_SERVICE_URL=http://auth-service:8081
+      - REDIS_URL=redis:6379
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - SQS_ENDPOINT=http://localstack:4566
+    depends_on: [db-profile, redis, localstack]
+
+  realtime-service:
+    build: ./services/realtime-service
+    environment:
+      - REDIS_URL=redis:6379
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - SQS_ENDPOINT=http://localstack:4566
+    depends_on: [redis, localstack]
+
+  frontend:
+    build: ./frontend
+    ports: ["3000:80"]
+    environment:
+      - VITE_API_URL=http://localhost:8080
+    depends_on: [api-gateway]
+
+volumes:
+  auth_data:
+  tournament_data:
+  team_data:
+  match_data:
+  profile_data:

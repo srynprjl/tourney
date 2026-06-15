@@ -12,6 +12,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
@@ -45,6 +50,8 @@ type Application struct {
 var (
 	db        *gorm.DB
 	rdb       *redis.Client
+	sqsClient *sqs.Client
+	queueURL  string
 	ctx       = context.Background()
 	jwtSecret = []byte(os.Getenv("JWT_SECRET"))
 	logger    *slog.Logger
@@ -134,38 +141,120 @@ func initRedis() {
 	}
 }
 
+func initSQS() {
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		region = "us-east-1"
+	}
+	endpoint := os.Getenv("SQS_ENDPOINT")
+	accessKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(region),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
+	)
+	if err != nil {
+		logger.Error("Unable to load AWS SDK config", "error", err)
+		os.Exit(1)
+	}
+
+	sqsClient = sqs.NewFromConfig(cfg, func(o *sqs.Options) {
+		if endpoint != "" {
+			o.BaseEndpoint = aws.String(endpoint)
+		}
+	})
+
+	for i := 0; i < 30; i++ {
+		// Auto-create queue if it doesn't exist
+		out, cerr := sqsClient.CreateQueue(ctx, &sqs.CreateQueueInput{
+			QueueName: aws.String(taskQueue),
+		})
+		if cerr == nil {
+			queueURL = *out.QueueUrl
+			logger.Info("SQS initialized", "queue_url", queueURL)
+			return
+		}
+
+		// If it already exists, get the URL
+		gurl, gerr := sqsClient.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{
+			QueueName: aws.String(taskQueue),
+		})
+		if gerr == nil {
+			queueURL = *gurl.QueueUrl
+			logger.Info("SQS initialized", "queue_url", queueURL)
+			return
+		}
+
+		err = cerr // keep track of the creation error
+		logger.Warn("Failed to connect to SQS or create queue", "attempt", i+1, "error", cerr, "gerr", gerr)
+		time.Sleep(2 * time.Second)
+	}
+
+	if err != nil {
+		logger.Error("Could not initialize SQS after retries", "error", err)
+		os.Exit(1)
+	}
+}
+
 // Simple Task Queue Worker
 func startTaskWorker() {
-	logger.Info("Starting background task worker")
+	logger.Info("Starting background task worker (SQS)")
 	for {
-		// BLPOP blocks until an element is available in the list
-		result, err := rdb.BLPop(ctx, 0, taskQueue).Result()
+		msgOutput, err := sqsClient.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+			QueueUrl:            aws.String(queueURL),
+			MaxNumberOfMessages: 1,
+			WaitTimeSeconds:     20,
+		})
 		if err != nil {
-			logger.Error("Error popping task from queue", "error", err)
+			logger.Error("Error receiving message from SQS", "error", err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
 
-		// result[0] is the key, result[1] is the value
-		taskData := result[1]
+		if len(msgOutput.Messages) == 0 {
+			continue
+		}
+
+		msg := msgOutput.Messages[0]
+		taskData := *msg.Body
 		logger.Info("Processing background task", "task_data", taskData)
 
 		// Simulate work
 		time.Sleep(500 * time.Millisecond)
+
+		// Store in completed tasks history (keep last 50)
+		rdb.LPush(ctx, taskQueue+":completed", taskData)
+		rdb.LTrim(ctx, taskQueue+":completed", 0, 49)
+
+		// Delete message from SQS
+		_, err = sqsClient.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+			QueueUrl:      aws.String(queueURL),
+			ReceiptHandle: msg.ReceiptHandle,
+		})
+		if err != nil {
+			logger.Error("Failed to delete message from SQS", "error", err)
+		}
+
 		logger.Info("Background task completed", "task_data", taskData)
 	}
 }
 
-func publishTask(taskType string, payload any) {
+func publishTask(taskType string, payload any) error {
 	data, _ := json.Marshal(map[string]any{
 		"type":    taskType,
 		"payload": payload,
 		"time":    time.Now().Format(time.RFC3339),
 	})
-	err := rdb.RPush(ctx, taskQueue, data).Err()
+	_, err := sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
+		QueueUrl:    aws.String(queueURL),
+		MessageBody: aws.String(string(data)),
+	})
 	if err != nil {
-		logger.Error("Failed to publish task to Redis", "error", err)
+		logger.Error("Failed to publish task to SQS", "error", err)
+		return err
 	}
+	return nil
 }
 
 func adminAuthMiddleware() gin.HandlerFunc {
@@ -214,6 +303,7 @@ func main() {
 	setupLogger()
 	initDB()
 	initRedis()
+	initSQS()
 
 	// Start background worker
 	go startTaskWorker()
@@ -245,6 +335,7 @@ func main() {
 			"status": "healthy",
 			"db": "connected",
 			"redis": rdb.Ping(ctx).Err() == nil,
+			"sqs": sqsClient != nil,
 		}) 
 	})
 
@@ -305,6 +396,7 @@ func register(c *gin.Context) {
 	})
 
 	logger.Info("User registered", "username", user.Username, "id", user.ID)
+	rdb.Publish(ctx, "global_activity", fmt.Sprintf("New operative inducted into the system: %s", user.Username))
 	c.JSON(http.StatusCreated, gin.H{"message": "User created successfully"})
 }
 
@@ -421,6 +513,72 @@ func verifyToken(c *gin.Context) {
 	})
 }
 
+func createUserAdmin(c *gin.Context) {
+	var input struct {
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
+		IsAdmin  bool   `json:"is_admin"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	user := User{
+		Username: input.Username,
+		Password: string(hashedPassword),
+		IsAdmin:  input.IsAdmin,
+	}
+
+	if err := db.Create(&user).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username already exists"})
+		return
+	}
+
+	logger.Info("User created by admin", "username", user.Username)
+	c.JSON(http.StatusCreated, user)
+}
+
+func updateUserAdmin(c *gin.Context) {
+	id := c.Param("id")
+	var user User
+	if err := db.First(&user, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	var input struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		IsAdmin  *bool  `json:"is_admin"`
+		IsBanned *bool  `json:"is_banned"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if input.Username != "" {
+		user.Username = input.Username
+	}
+	if input.Password != "" {
+		hashed, _ := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+		user.Password = string(hashed)
+	}
+	if input.IsAdmin != nil {
+		user.IsAdmin = *input.IsAdmin
+	}
+	if input.IsBanned != nil {
+		user.IsBanned = *input.IsBanned
+	}
+
+	db.Save(&user)
+	c.JSON(http.StatusOK, user)
+}
+
 func listUsers(c *gin.Context) {
 	var users []User
 	db.Find(&users)
@@ -506,13 +664,27 @@ func getLogs(c *gin.Context) {
 }
 
 func getMQStats(c *gin.Context) {
-	len, err := rdb.LLen(ctx, taskQueue).Result()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not get MQ stats"})
-		return
+	// Get SQS stats
+	attribs, err := sqsClient.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
+		QueueUrl: aws.String(queueURL),
+		AttributeNames: []types.QueueAttributeName{
+			types.QueueAttributeNameApproximateNumberOfMessages,
+			types.QueueAttributeNameApproximateNumberOfMessagesNotVisible,
+		},
+	})
+
+	sqsStats := make(map[string]string)
+	if err == nil {
+		sqsStats = attribs.Attributes
 	}
+
+	// Get last 10 completed tasks from Redis
+	completed, _ := rdb.LRange(ctx, taskQueue+":completed", 0, 9).Result()
+
 	c.JSON(http.StatusOK, gin.H{
 		"queue_name":   taskQueue,
-		"queue_length": len,
+		"sqs_url":      queueURL,
+		"sqs_stats":    sqsStats,
+		"completed":    completed,
 	})
 }
