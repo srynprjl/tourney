@@ -48,9 +48,11 @@ type Match struct {
 	CurrentTime  int          `json:"current_time"`                    // In seconds
 	Events       []MatchEvent `gorm:"constraint:OnDelete:CASCADE;" json:"events"`
 	NextMatchID  *uuid.UUID   `gorm:"type:uuid" json:"next_match_id"`
+	LoserNextMatchID *uuid.UUID `gorm:"type:uuid" json:"loser_next_match_id"`
 	TieID        *uuid.UUID   `gorm:"type:uuid" json:"tie_id"`
 	WinnerID     *uuid.UUID   `gorm:"type:uuid" json:"winner_id"`
 	Position     int          `gorm:"default:0" json:"position"`
+	LoserPosition int         `gorm:"default:0" json:"loser_position"`
 }
 
 type MatchEvent struct {
@@ -298,9 +300,40 @@ func publishMatchCompleted(match Match) {
 		"team1_score":   match.Team1Score,
 		"team2_score":   match.Team2Score,
 		"winner_id":     winnerID,
+		"stage":         match.Stage,
 	}
-	publishTask("MATCH_COMPLETED", payload)
+
+	// Publish to profile-service's task queue for Elo updates
+	publishToExternalQueue("profile_tasks", "MATCH_COMPLETED", payload)
+
 	rdb.Publish(ctx, "global_activity", fmt.Sprintf("Match result finalized: %d - %d", match.Team1Score, match.Team2Score))
+}
+
+func publishToExternalQueue(qName, taskType string, payload any) error {
+	data, _ := json.Marshal(map[string]any{
+		"type":    taskType,
+		"payload": payload,
+		"time":    time.Now().Format(time.RFC3339),
+	})
+
+	// Get external queue URL
+	out, err := sqsClient.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{
+		QueueName: aws.String(qName),
+	})
+	if err != nil {
+		logger.Error("Failed to get external queue URL", "queue", qName, "error", err)
+		return err
+	}
+
+	_, err = sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
+		QueueUrl:    out.QueueUrl,
+		MessageBody: aws.String(string(data)),
+	})
+	if err != nil {
+		logger.Error("Failed to publish task to external SQS", "queue", qName, "error", err)
+		return err
+	}
+	return nil
 }
 
 func publishTask(taskType string, payload any) error {
@@ -450,7 +483,18 @@ func bulkCreateMatches(c *gin.Context) {
 
 func deleteMatchesByTournament(c *gin.Context) {
 	tid := c.Param("tournamentId")
-	db.Where("tournament_id = ?", tid).Delete(&Match{})
+	round := c.Query("round")
+	stage := c.Query("stage")
+
+	query := db.Where("tournament_id = ?", tid)
+	if round != "" {
+		query = query.Where("round = ?", round)
+	}
+	if stage != "" {
+		query = query.Where("stage = ?", stage)
+	}
+
+	query.Delete(&Match{})
 	rdb.Del(ctx, fmt.Sprintf("tournament:%s:matches", tid))
 	c.JSON(http.StatusOK, gin.H{"message": "Matches deleted"})
 }
@@ -622,6 +666,10 @@ func updateScore(c *gin.Context) {
 		match.WinnerID = &match.Team1ID
 	} else if match.Team2Score > match.Team1Score {
 		match.WinnerID = &match.Team2ID
+	} else if tournament.Type == "knockout" || tournament.Type == "double_elimination" || match.Stage > 0 {
+		// Force winner in knockout
+		match.Team1Score++
+		match.WinnerID = &match.Team1ID
 	} else {
 		match.WinnerID = nil
 	}
@@ -632,7 +680,7 @@ func updateScore(c *gin.Context) {
 	}
 
 	// Advance logic (aggregate aware)
-	if tournament.Type == "knockout" || match.Stage == 1 {
+	if tournament.Type == "knockout" || tournament.Type == "double_elimination" || match.Stage > 0 {
 		handleKnockoutAdvancement(match, tournament)
 	}
 
@@ -753,7 +801,7 @@ func performSimulation(match *Match, tournament Tournament) {
 	match.Team2Score = int(float64(r.Intn(4)) * t2Form)
 
 	// 4. Force outcome in knockout stages if necessary
-	if match.Stage == 1 {
+	if match.Stage > 0 || tournament.Type == "knockout" || tournament.Type == "double_elimination" {
 		if tournament.IsDouble && match.TieID != nil {
 			var sibling Match
 			if err := db.Where("tie_id = ? AND id != ?", *match.TieID, match.ID).First(&sibling).Error; err == nil && sibling.IsPlayed {
@@ -771,7 +819,7 @@ func performSimulation(match *Match, tournament Tournament) {
 					match.Team1Score++
 				}
 			}
-		} else if !tournament.IsDouble && match.Team1Score == match.Team2Score {
+		} else if match.Team1Score == match.Team2Score {
 			// Single leg knockout - no draws allowed
 			match.Team1Score++
 		}
@@ -790,41 +838,68 @@ func performSimulation(match *Match, tournament Tournament) {
 
 	db.Save(match)
 
-	// handle advancement if knockout
-	if tournament.Type == "knockout" || match.Stage == 1 {
+	// handle advancement if knockout or advanced format
+	if tournament.Type == "knockout" || tournament.Type == "double_elimination" || match.Stage > 0 {
 		handleKnockoutAdvancement(*match, tournament)
 	}
 }
 
 func handleKnockoutAdvancement(match Match, tournament Tournament) {
-	if match.NextMatchID == nil {
-		return
-	}
+	// 1. Handle Winner
+	if match.NextMatchID != nil {
+		if tournament.IsDouble && match.TieID != nil {
+			var sibling Match
+			if err := db.Where("tie_id = ? AND id != ?", *match.TieID, match.ID).First(&sibling).Error; err == nil {
+				if match.IsPlayed && sibling.IsPlayed {
+					var t1Total, t2Total int
+					t1Total = match.Team1Score
+					t2Total = match.Team2Score
+					if sibling.Team1ID == match.Team1ID {
+						t1Total += sibling.Team1Score
+						t2Total += sibling.Team2Score
+					} else {
+						t1Total += sibling.Team2Score
+						t2Total += sibling.Team1Score
+					}
 
-	if tournament.IsDouble && match.TieID != nil {
-		var sibling Match
-		if err := db.Where("tie_id = ? AND id != ?", *match.TieID, match.ID).First(&sibling).Error; err == nil {
-			if match.IsPlayed && sibling.IsPlayed {
-				var t1Total, t2Total int
-				t1Total = match.Team1Score
-				t2Total = match.Team2Score
-				if sibling.Team1ID == match.Team1ID {
-					t1Total += sibling.Team1Score
-					t2Total += sibling.Team2Score
-				} else {
-					t1Total += sibling.Team2Score
-					t2Total += sibling.Team1Score
-				}
-
-				if t1Total > t2Total {
-					performAdvance(match, match.Team1ID)
-				} else if t2Total > t1Total {
-					performAdvance(match, match.Team2ID)
+					if t1Total > t2Total {
+						performAdvance(match, match.Team1ID)
+					} else if t2Total > t1Total {
+						performAdvance(match, match.Team2ID)
+					}
 				}
 			}
+		} else if match.WinnerID != nil {
+			performAdvance(match, *match.WinnerID)
 		}
-	} else if match.WinnerID != nil {
-		performAdvance(match, *match.WinnerID)
+	}
+
+	// 2. Handle Loser (for Double Elimination)
+	if match.LoserNextMatchID != nil && match.IsPlayed {
+		loserID := uuid.Nil
+		if match.WinnerID != nil {
+			if *match.WinnerID == match.Team1ID {
+				loserID = match.Team2ID
+			} else {
+				loserID = match.Team1ID
+			}
+		}
+
+		if loserID != uuid.Nil {
+			var nextMatch Match
+			if err := db.First(&nextMatch, "id = ?", *match.LoserNextMatchID).Error; err == nil {
+				if match.LoserPosition == 0 {
+					nextMatch.Team1ID = loserID
+				} else {
+					nextMatch.Team2ID = loserID
+				}
+				nextMatch.IsPlayed = false
+				nextMatch.Status = "scheduled"
+				nextMatch.WinnerID = nil
+				db.Save(&nextMatch)
+				rdb.Del(ctx, fmt.Sprintf("match:%s", nextMatch.ID.String()))
+			}
+		}
 	}
 }
 
@@ -839,6 +914,9 @@ func performAdvance(match Match, winnerID uuid.UUID) {
 	} else {
 		nextMatch.Team2ID = winnerID
 	}
+	nextMatch.IsPlayed = false
+	nextMatch.Status = "scheduled"
+	nextMatch.WinnerID = nil
 	db.Save(&nextMatch)
 
 	// Invalidate next match cache too

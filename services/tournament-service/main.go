@@ -29,8 +29,10 @@ import (
 type TournamentType string
 
 const (
-	Knockout TournamentType = "knockout"
-	Group    TournamentType = "group"
+	Knockout          TournamentType = "knockout"
+	Group             TournamentType = "group"
+	DoubleElimination TournamentType = "double_elimination"
+	Swiss             TournamentType = "swiss"
 )
 
 type Tournament struct {
@@ -41,6 +43,7 @@ type Tournament struct {
 	Type          TournamentType   `gorm:"not null" json:"type"`
 	Sport         string           `gorm:"not null" json:"sport"`
 	Mode          string           `gorm:"default:self" json:"mode"`
+	ParticipationMode string       `gorm:"default:team" json:"participation_mode"` // "individual" or "team"
 	MaxTeams      int              `gorm:"default:0" json:"max_teams"`
 	IsDouble      bool             `gorm:"default:false" json:"is_double"`
 	IsPublic      bool             `gorm:"default:false" json:"is_public"`
@@ -49,6 +52,7 @@ type Tournament struct {
 	PromoteCount  int              `gorm:"default:0" json:"promote_count"`
 	JoinCode      string           `json:"join_code"`
 	StreamLink    string           `json:"stream_link"`
+	VenueID       *uuid.UUID       `gorm:"type:uuid" json:"venue_id"`
 	EntryFee      float64          `gorm:"default:0" json:"entry_fee"`
 	CreatorID     uint             `gorm:"not null" json:"creator_id"`
 	Teams         []Team           `gorm:"constraint:OnDelete:CASCADE;" json:"teams"`
@@ -121,9 +125,11 @@ type Match struct {
 	Status       string     `json:"status"`
 	CurrentTime  int        `json:"current_time"`
 	NextMatchID  *uuid.UUID `json:"next_match_id"`
+	LoserNextMatchID *uuid.UUID `json:"loser_next_match_id"`
 	TieID        *uuid.UUID `json:"tie_id"`
 	WinnerID     *uuid.UUID `json:"winner_id"`
 	Position     int        `json:"position"`
+	LoserPosition int       `json:"loser_position"`
 }
 
 var (
@@ -277,23 +283,32 @@ func startTaskWorker() {
 		logger.Info("Processing background task", "task_data", taskData)
 
 		var task struct {
-			Type    string `json:"type"`
-			Payload any    `json:"payload"`
+			Type    string          `json:"type"`
+			Payload json.RawMessage `json:"payload"`
 		}
 		if err := json.Unmarshal([]byte(taskData), &task); err == nil {
 			if task.Type == "GENERATE_TOURNAMENT" {
-				payload := task.Payload.(map[string]any)
-				tid := payload["tournament_id"].(string)
-				authHeader := payload["auth_token"].(string)
+				var p struct {
+					TournamentID string `json:"tournament_id"`
+					AuthToken    string `json:"auth_token"`
+				}
+				if err := json.Unmarshal(task.Payload, &p); err == nil {
+					tid := p.TournamentID
+					authHeader := p.AuthToken
 
-				var t Tournament
-				if err := db.Preload("Teams").First(&t, "id = ?", tid).Error; err == nil {
-					if t.Type == Knockout {
-						generateKOFromTeams(t, t.Teams, authHeader)
-					} else {
-						generateGroupStage(t, authHeader)
+					var t Tournament
+					if err := db.Preload("Teams").First(&t, "id = ?", tid).Error; err == nil {
+						if t.Type == Knockout {
+							generateKOFromTeams(t, t.Teams, authHeader)
+						} else if t.Type == DoubleElimination {
+							generateDoubleElimination(t, t.Teams, authHeader)
+						} else if t.Type == Swiss {
+							generateSwissRound(t, t.Teams, 1, authHeader)
+						} else {
+							generateGroupStage(t, authHeader)
+						}
+						logger.Info("Async tournament generation completed", "tournament_id", tid)
 					}
-					logger.Info("Async tournament generation completed", "tournament_id", tid)
 				}
 			}
 		}
@@ -364,29 +379,33 @@ func main() {
 	})
 
 	api := r.Group("/")
-	api.Use(authMiddleware())
 	{
-		api.GET("/", listTournaments)
-		api.POST("/", createTournament)
-		api.GET("/participating", getParticipatingTournaments)
-
-		api.GET("/:id", getTournament)
 		api.GET("/by-code/:code", getTournamentByCode)
-		api.PUT("/:id", updateTournament)
-		api.DELETE("/:id", deleteTournament)
-		api.POST("/:id/news", addNews)
-		api.DELETE("/:id/news/:newsId", deleteNews)
-		api.POST("/:id/rules", addRule)
-		api.DELETE("/:id/rules/:ruleId", deleteRule)
-		api.POST("/:id/prizes", addPrize)
-		api.DELETE("/:id/prizes/:prizeId", deletePrize)
-		api.POST("/:id/sponsors", addSponsor)
-		api.POST("/:id/teams", addTeam)
-		api.DELETE("/:id/teams/:teamId", removeTeam)
-		api.POST("/:id/register", registerTeam)
-		api.POST("/:id/generate", generateTournament)
-		api.POST("/:id/promote", promoteToKnockout)
-		api.GET("/:id/standings", getStandings)
+
+		api.Use(authMiddleware())
+		{
+			api.GET("/", listTournaments)
+			api.PATCH("/:id/venue", updateTournamentVenue)
+			api.GET("/:id", getTournament)
+			api.POST("/", createTournament)
+			api.GET("/participating", getParticipatingTournaments)
+			api.PUT("/:id", updateTournament)
+			api.DELETE("/:id", deleteTournament)
+			api.POST("/:id/news", addNews)
+			api.DELETE("/:id/news/:newsId", deleteNews)
+			api.POST("/:id/rules", addRule)
+			api.DELETE("/:id/rules/:ruleId", deleteRule)
+			api.POST("/:id/prizes", addPrize)
+			api.DELETE("/:id/prizes/:prizeId", deletePrize)
+			api.POST("/:id/sponsors", addSponsor)
+			api.POST("/:id/teams", addTeam)
+			api.DELETE("/:id/teams/:teamId", removeTeam)
+			api.POST("/:id/register", registerTeam)
+			api.POST("/:id/generate", generateTournament)
+			api.POST("/:id/swiss/next", generateNextSwissRound)
+			api.POST("/:id/promote", promoteToKnockout)
+			api.GET("/:id/standings", getStandings)
+		}
 
 		// Admin only
 		admin := api.Group("/admin")
@@ -524,6 +543,7 @@ func createTournament(c *gin.Context) {
 		Type          TournamentType `json:"type" binding:"required"`
 		Sport         string         `json:"sport" binding:"required"`
 		Mode          string         `json:"mode" binding:"required"`
+		ParticipationMode string     `json:"participation_mode"`
 		MaxTeams      int            `json:"max_teams"`
 		IsDouble      bool           `json:"is_double"`
 		IsPublic      bool           `json:"is_public"`
@@ -537,10 +557,17 @@ func createTournament(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+
+	pMode := input.ParticipationMode
+	if pMode == "" {
+		pMode = "team"
+	}
+
 	uidRaw, _ := c.Get("user_id")
 	uid := uidRaw.(uint)
 	t := Tournament{
 		ID: uuid.New(), Name: input.Name, Type: input.Type, Sport: input.Sport, Mode: input.Mode,
+		ParticipationMode: pMode,
 		MaxTeams: input.MaxTeams, IsDouble: input.IsDouble, IsPublic: input.IsPublic,
 		GroupCount: input.GroupCount, TeamsPerGroup: input.TeamsPerGroup, PromoteCount: input.PromoteCount,
 		StreamLink: input.StreamLink, EntryFee: input.EntryFee,
@@ -557,9 +584,13 @@ func listTournaments(c *gin.Context) {
 	isAdminRaw, _ := c.Get("is_admin")
 	isAdmin := isAdminRaw.(bool)
 
+	filter := c.Query("filter")
+
 	var ts []Tournament
-	if isAdmin {
+	if isAdmin && filter != "mine" {
 		db.Find(&ts)
+	} else if filter == "mine" {
+		db.Where("creator_id = ?", uid).Find(&ts)
 	} else {
 		db.Where("creator_id = ? OR is_public = ?", uid, true).Find(&ts)
 	}
@@ -821,10 +852,37 @@ func registerTeam(c *gin.Context) {
 		c.JSON(403, gin.H{"error": "Invalid code"})
 		return
 	}
+
+	uidRaw, _ := c.Get("user_id")
+	uid := uidRaw.(uint)
+	unameRaw, _ := c.Get("username")
+	uname := unameRaw.(string)
+
+	finalTeamID := input.TeamID
+	finalTeamName := input.TeamName
+
+	if t.ParticipationMode == "individual" {
+		// If it's individual mode, we create a pseudo-team for this user
+		// We can generate a deterministic UUID based on UserID to prevent double registration
+		namespace := uuid.MustParse("00000000-0000-0000-0000-000000000000")
+		finalTeamID = uuid.NewSHA1(namespace, []byte(fmt.Sprintf("%d", uid)))
+		finalTeamName = uname
+	} else if finalTeamID == uuid.Nil {
+		c.JSON(400, gin.H{"error": "Team ID required for team tournaments"})
+		return
+	}
+
+	// Check if already registered
+	var existing Team
+	if err := db.Where("tournament_id = ? AND squad_id = ?", tid, finalTeamID).First(&existing).Error; err == nil {
+		c.JSON(400, gin.H{"error": "Already registered"})
+		return
+	}
+
 	db.Create(&Team{
 		ID:           uuid.New(),
-		SquadID:      input.TeamID,
-		Name:         input.TeamName,
+		SquadID:      finalTeamID,
+		Name:         finalTeamName,
 		TournamentID: tid,
 	})
 	c.JSON(200, gin.H{"message": "Registered"})
@@ -848,6 +906,28 @@ func removeTeam(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"message": "Team removed"})
+}
+
+func updateTournamentVenue(c *gin.Context) {
+	tid, _ := uuid.Parse(c.Param("id"))
+
+	var input struct {
+		VenueID uuid.UUID `json:"venue_id"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	var t Tournament
+	if err := db.First(&t, "id = ?", tid).Error; err != nil {
+		c.JSON(404, gin.H{"error": "Tournament not found"})
+		return
+	}
+
+	t.VenueID = &input.VenueID
+	db.Save(&t)
+	c.JSON(200, t)
 }
 
 func getStandings(c *gin.Context) {
@@ -974,10 +1054,22 @@ func pushMatches(matches []Match, authHeader string) {
 		return
 	}
 
-	// Delete old matches first
-	dReq, _ := http.NewRequest("DELETE", matchURL+"/tournament/"+matches[0].TournamentID.String(), nil)
-	dReq.Header.Set("Authorization", authHeader)
-	(&http.Client{}).Do(dReq)
+	// Delete old matches for these rounds/stages to allow idempotent updates
+	type rs struct {
+		R int
+		S int
+	}
+	seen := make(map[rs]bool)
+	for _, m := range matches {
+		seen[rs{R: m.Round, S: m.Stage}] = true
+	}
+
+	for key := range seen {
+		url := fmt.Sprintf("%s/tournament/%s?round=%d&stage=%d", matchURL, matches[0].TournamentID.String(), key.R, key.S)
+		dReq, _ := http.NewRequest("DELETE", url, nil)
+		dReq.Header.Set("Authorization", authHeader)
+		(&http.Client{}).Do(dReq)
+	}
 
 	// Bulk create new matches
 	body, _ := json.Marshal(matches)
@@ -1192,6 +1284,282 @@ func generateKOFromTeams(t Tournament, teams []Team, authHeader string) {
 		}
 	}
 	pushMatches(allMatches, authHeader)
+}
+
+func generateDoubleElimination(t Tournament, teams []Team, authHeader string) {
+	n := len(teams)
+	p := 1
+	for p < n {
+		p *= 2
+	}
+
+	// 1. Setup WB
+	wb := make([][]Match, 0)
+	roundNum := 1
+	curP := p
+	for curP >= 2 {
+		roundMatches := make([]Match, curP/2)
+		for i := 0; i < curP/2; i++ {
+			roundMatches[i] = Match{
+				ID:           uuid.New(),
+				TournamentID: t.ID,
+				Round:        roundNum,
+				Stage:        1,
+				Status:       "scheduled",
+			}
+		}
+		wb = append(wb, roundMatches)
+		curP /= 2
+		roundNum++
+	}
+
+	// Initial WB pairings
+	for i := 0; i < p/2; i++ {
+		if i*2 < n {
+			wb[0][i].Team1ID = teams[i*2].SquadID
+		}
+		if i*2+1 < n {
+			wb[0][i].Team2ID = teams[i*2+1].SquadID
+		}
+	}
+
+	// Link WB winners
+	for r := 0; r < len(wb)-1; r++ {
+		for i := 0; i < len(wb[r]); i++ {
+			nmid := wb[r+1][i/2].ID
+			wb[r][i].NextMatchID = &nmid
+			wb[r][i].Position = i % 2
+		}
+	}
+
+	// 2. Setup LB
+	lb := make([][]Match, 0)
+	lbRoundNum := 1
+	
+	// LB Round 1: WB R1 Losers
+	lbR1Size := p / 4
+	if lbR1Size > 0 {
+		r1 := make([]Match, lbR1Size)
+		for i := 0; i < lbR1Size; i++ {
+			r1[i] = Match{ID: uuid.New(), TournamentID: t.ID, Round: lbRoundNum, Stage: 2, Status: "scheduled"}
+		}
+		lb = append(lb, r1)
+		
+		// Link WB R1 losers to LB R1
+		for i := 0; i < len(wb[0]); i++ {
+			wb[0][i].LoserNextMatchID = &lb[0][i/2].ID
+			wb[0][i].LoserPosition = i % 2
+		}
+		lbRoundNum++
+	} else if p == 2 {
+		// Only 2 teams - no LB R1, loser goes directly to something? 
+		// Actually p=2 means 1 WB match. Loser doesn't have an LB match to go to besides LB Final (which is LB R1)
+	}
+
+	// Subsequent LB rounds
+	// For each subsequent WB round (except the very last WB Final), we have TWO LB rounds.
+	for r := 1; r < len(wb); r++ {
+		// Round A: Winners of previous LB round vs each other
+		prevLB := lb[len(lb)-1]
+		if len(prevLB) >= 2 {
+			internalR := make([]Match, len(prevLB)/2)
+			for i := 0; i < len(internalR); i++ {
+				m := Match{ID: uuid.New(), TournamentID: t.ID, Round: lbRoundNum, Stage: 2, Status: "scheduled"}
+				prevLB[i*2].NextMatchID = &m.ID
+				prevLB[i*2].Position = 0
+				prevLB[i*2+1].NextMatchID = &m.ID
+				prevLB[i*2+1].Position = 1
+				internalR[i] = m
+			}
+			lb = append(lb, internalR)
+			lbRoundNum++
+		}
+
+		// Round B: Winners of current LB round vs Losers of WB round 'r'
+		curLB := lb[len(lb)-1]
+		dropInR := make([]Match, len(wb[r]))
+		for i := 0; i < len(dropInR); i++ {
+			m := Match{ID: uuid.New(), TournamentID: t.ID, Round: lbRoundNum, Stage: 2, Status: "scheduled"}
+			// Link WB Loser
+			wb[r][i].LoserNextMatchID = &m.ID
+			wb[r][i].LoserPosition = 1
+			
+			// Link LB Winner
+			if i < len(curLB) {
+				curLB[i].NextMatchID = &m.ID
+				curLB[i].Position = 0
+			}
+			dropInR[i] = m
+		}
+		lb = append(lb, dropInR)
+		lbRoundNum++
+	}
+
+	// 3. Grand Final
+	gf := Match{ID: uuid.New(), TournamentID: t.ID, Round: 1, Stage: 3, Status: "scheduled"}
+	// WB Final Winner
+	wbFinal := wb[len(wb)-1][0]
+	wbFinal.NextMatchID = &gf.ID
+	wbFinal.Position = 0
+	wb[len(wb)-1][0] = wbFinal
+
+	// LB Final Winner
+	if len(lb) > 0 {
+		lbFinal := lb[len(lb)-1][0]
+		lbFinal.NextMatchID = &gf.ID
+		lbFinal.Position = 1
+		lb[len(lb)-1][0] = lbFinal
+	} else if p == 2 {
+		// For 2 teams, loser of WB Final goes to GF as Team 2? 
+		// Actually p=2 is just 1 match. 
+		wb[0][0].LoserNextMatchID = &gf.ID
+		wb[0][0].LoserPosition = 1
+	}
+
+	// 4. Collect all
+	var allMatches []Match
+	for _, r := range wb { allMatches = append(allMatches, r...) }
+	for _, r := range lb { allMatches = append(allMatches, r...) }
+	allMatches = append(allMatches, gf)
+
+	// Auto-resolve byes
+	for i := range allMatches {
+		m := &allMatches[i]
+		if m.Round == 1 && m.Stage == 1 {
+			if m.Team1ID == uuid.Nil && m.Team2ID != uuid.Nil {
+				m.WinnerID = &m.Team2ID
+				m.IsPlayed = true
+				m.Status = "completed"
+			} else if m.Team2ID == uuid.Nil && m.Team1ID != uuid.Nil {
+				m.WinnerID = &m.Team1ID
+				m.IsPlayed = true
+				m.Status = "completed"
+			}
+		}
+	}
+
+	pushMatches(allMatches, authHeader)
+}
+
+func generateSwissRound(t Tournament, teams []Team, round int, authHeader string) {
+	n := len(teams)
+	if n < 2 {
+		return
+	}
+
+	// For Swiss, we need to pair teams with similar records
+	// Fetch all existing matches for this tournament to calculate records
+	matchURL := os.Getenv("MATCH_SERVICE_URL")
+	if matchURL == "" {
+		matchURL = "http://match-service:8083"
+	}
+	req, _ := http.NewRequest("GET", matchURL+"/tournament/"+t.ID.String(), nil)
+	req.Header.Set("Authorization", authHeader)
+	resp, err := (&http.Client{}).Do(req)
+	var allMatches []Match
+	if err == nil {
+		defer resp.Body.Close()
+		json.NewDecoder(resp.Body).Decode(&allMatches)
+	}
+
+	// Calculate wins for each team
+	wins := make(map[uuid.UUID]int)
+	for _, m := range allMatches {
+		if m.IsPlayed && m.WinnerID != nil {
+			wins[*m.WinnerID]++
+		}
+	}
+
+	// Sort teams: primarily by wins, secondarily by name (stable sort)
+	sort.SliceStable(teams, func(i, j int) bool {
+		wi, wj := wins[teams[i].SquadID], wins[teams[j].SquadID]
+		if wi != wj {
+			return wi > wj
+		}
+		return teams[i].Name < teams[j].Name
+	})
+
+	if round == 1 {
+		// Randomize first round pairings
+		r := rand.New(rand.NewSource(time.Now().UnixNano()))
+		r.Shuffle(n, func(i, j int) { teams[i], teams[j] = teams[j], teams[i] })
+	}
+
+	var roundMatches []Match
+	for i := 0; i < n/2; i++ {
+		roundMatches = append(roundMatches, Match{
+			ID:           uuid.New(),
+			TournamentID: t.ID,
+			Round:        round,
+			Stage:        0,
+			Team1ID:      teams[i*2].SquadID,
+			Team2ID:      teams[i*2+1].SquadID,
+			Status:       "scheduled",
+		})
+	}
+
+	// Handle bye if odd number of teams
+	if n%2 != 0 {
+		roundMatches = append(roundMatches, Match{
+			ID:           uuid.New(),
+			TournamentID: t.ID,
+			Round:        round,
+			Stage:        0,
+			Team1ID:      teams[n-1].SquadID,
+			Team2ID:      uuid.Nil,
+			Status:       "completed",
+			IsPlayed:     true,
+			WinnerID:     &teams[n-1].SquadID,
+		})
+	}
+
+	pushMatches(roundMatches, authHeader)
+}
+
+func generateNextSwissRound(c *gin.Context) {
+	id := c.Param("id")
+	authHeader := c.GetHeader("Authorization")
+
+	var t Tournament
+	if err := db.Preload("Teams").First(&t, "id = ?", id).Error; err != nil {
+		c.JSON(404, gin.H{"error": "Tournament not found"})
+		return
+	}
+
+	if t.Type != Swiss {
+		c.JSON(400, gin.H{"error": "Not a Swiss tournament"})
+		return
+	}
+
+	// Fetch current matches to determine the next round number
+	matchURL := os.Getenv("MATCH_SERVICE_URL")
+	if matchURL == "" {
+		matchURL = "http://match-service:8083"
+	}
+	req, _ := http.NewRequest("GET", matchURL+"/tournament/"+id, nil)
+	req.Header.Set("Authorization", authHeader)
+	resp, err := (&http.Client{}).Do(req)
+	var matches []Match
+	if err == nil {
+		defer resp.Body.Close()
+		json.NewDecoder(resp.Body).Decode(&matches)
+	}
+
+	maxRound := 0
+	for _, m := range matches {
+		if m.Round > maxRound {
+			maxRound = m.Round
+		}
+		if !m.IsPlayed {
+			c.JSON(400, gin.H{"error": fmt.Sprintf("Round %d is not yet complete", m.Round)})
+			return
+		}
+	}
+
+	nextRound := maxRound + 1
+	generateSwissRound(t, t.Teams, nextRound, authHeader)
+
+	c.JSON(200, gin.H{"message": fmt.Sprintf("Round %d pairings generated", nextRound)})
 }
 
 func promoteToKnockout(c *gin.Context) {

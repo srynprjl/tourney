@@ -10,6 +10,7 @@ import {
   Users,
   Award,
   Activity,
+  MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/context/ThemeContext";
@@ -40,6 +41,7 @@ const Sidebar = () => {
   const navItems = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { name: "Arenas", path: "/tournaments", icon: Trophy },
+    { name: "Command", path: "/venues", icon: MapPin },
     { name: "Squads", path: "/teams", icon: Users },
   ];
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -18,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -31,6 +33,7 @@ type Profile struct {
 	AvatarURL string    `json:"avatar_url"`
 	Location  string    `json:"location"`
 	Rating    int       `gorm:"default:1200" json:"rating"`
+	Credits   float64   `gorm:"default:0" json:"credits"`
 	Public    bool      `gorm:"default:true" json:"public"`
 	Awards    []Award   `gorm:"constraint:OnDelete:CASCADE;" json:"awards"`
 	Comments  []Comment `gorm:"constraint:OnDelete:CASCADE;" json:"comments"`
@@ -233,12 +236,24 @@ func startTaskWorker() {
 		logger.Info("Processing background task", "task_data", taskData)
 
 		var task struct {
-			Type    string `json:"type"`
-			Payload any    `json:"payload"`
+			Type    string          `json:"type"`
+			Payload json.RawMessage `json:"payload"`
 		}
 		if err := json.Unmarshal([]byte(taskData), &task); err == nil {
 			if task.Type == "MATCH_COMPLETED" {
-				processMatchCompleted(task.Payload)
+				var matchPayload struct {
+					MatchID      string `json:"match_id"`
+					TournamentID string `json:"tournament_id"`
+					Team1ID      string `json:"team1_id"`
+					Team2ID      string `json:"team2_id"`
+					WinnerID     string `json:"winner_id"`
+					Stage        int    `json:"stage"`
+				}
+				if err := json.Unmarshal(task.Payload, &matchPayload); err == nil {
+					processMatchCompleted(matchPayload)
+				} else {
+					logger.Error("Failed to unmarshal match payload", "error", err)
+				}
 			}
 		}
 
@@ -259,17 +274,20 @@ func startTaskWorker() {
 	}
 }
 
-func processMatchCompleted(payload any) {
-	data, ok := payload.(map[string]any)
-	if !ok {
-		return
-	}
-
-	matchID, _ := data["match_id"].(string)
-	tournamentID, _ := data["tournament_id"].(string)
-	team1ID, _ := data["team1_id"].(string)
-	team2ID, _ := data["team2_id"].(string)
-	winnerID, _ := data["winner_id"].(string)
+func processMatchCompleted(data struct {
+	MatchID      string `json:"match_id"`
+	TournamentID string `json:"tournament_id"`
+	Team1ID      string `json:"team1_id"`
+	Team2ID      string `json:"team2_id"`
+	WinnerID     string `json:"winner_id"`
+	Stage        int    `json:"stage"`
+}) {
+	matchID := data.MatchID
+	tournamentID := data.TournamentID
+	team1ID := data.Team1ID
+	team2ID := data.Team2ID
+	winnerID := data.WinnerID
+	stage := data.Stage
 
 	// 1. Fetch team rosters
 	t1Players := fetchTeamRoster(team1ID)
@@ -302,17 +320,56 @@ func processMatchCompleted(payload any) {
 
 	// 5. Calculate Change (K-factor = 32)
 	k := 32.0
-	diff1 := int(k * (s1 - e1))
-	diff2 := int(k * (s2 - e2))
+	diff1 := int(math.Round(k * (s1 - e1)))
+	diff2 := int(math.Round(k * (s2 - e2)))
+
+	// Ensure at least 1 point change for wins/losses
+	if s1 == 1 && diff1 == 0 { diff1 = 1 }
+	if s1 == 0 && diff1 == 0 { diff1 = -1 }
+	if s2 == 1 && diff2 == 0 { diff2 = 1 }
+	if s2 == 0 && diff2 == 0 { diff2 = -1 }
 
 	// 6. Update individual ratings and record history
 	updateRatings(t1Players, diff1, tournamentID, matchID, team1ID, getResultString(s1))
 	updateRatings(t2Players, diff2, tournamentID, matchID, team2ID, getResultString(s2))
 
+	// 7. Award Credits for Grand Finals (Stage 3)
+	if stage == 3 {
+		winnerPlayers := t1Players
+		if s2 == 1 {
+			winnerPlayers = t2Players
+		}
+		if s1 == 1 || s2 == 1 {
+			awardCredits(winnerPlayers, 100.0) // 100 credits for winning a tournament
+			logger.Info("Tournament prizes awarded", "match_id", matchID, "amount", 100.0)
+		}
+	}
+
 	logger.Info("Elo updated for match", "match_id", matchID, "team1_diff", diff1, "team2_diff", diff2)
 }
 
+func awardCredits(userIDs []uint, amount float64) {
+	for _, id := range userIDs {
+		db.Model(&Profile{}).Where("user_id = ?", id).Update("credits", gorm.Expr("credits + ?", amount))
+	}
+}
+
 func fetchTeamRoster(teamID string) []uint {
+	// Check if it's an individual pseudo-team
+	// We use a specific namespace for deterministic UUIDs for individuals
+	namespace := uuid.MustParse("00000000-0000-0000-0000-000000000000")
+	
+	// If it's a pseudo-team, we can't easily "reverse" the SHA1 hash to get the UserID.
+	// Instead, we'll try to find a profile that matches this SquadID if it's an individual tournament.
+	// But wait, it's easier: for individual tournaments, the Team1ID passed in the event IS the pseudo-team ID.
+	
+	// Actually, the most robust way is to query the profile-service's own DB to see if any profile
+	// "pseudo-id" matches. But profiles don't store pseudo-ids.
+	
+	// Better approach: Since we can't reverse the hash, we'll try to look up the team in team-service.
+	// If it's not found (404), AND it looks like it might be an individual mode,
+	// we'll assume the teamID IS a user-related ID.
+	
 	teamURL := os.Getenv("TEAM_SERVICE_URL")
 	if teamURL == "" {
 		teamURL = "http://team-service:8084"
@@ -323,6 +380,25 @@ func fetchTeamRoster(teamID string) []uint {
 		return nil
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		// Possibly an individual. In individual mode, we store the result under the UserID directly.
+		// However, we don't have the UserID.
+		// Let's look at how tournament-service registers individuals.
+		// It uses uuid.NewSHA1(namespace, []byte(fmt.Sprintf("%d", uid)))
+		
+		// If we can't find the team, let's scan our profiles to see if any user's hashed ID matches.
+		// This is slow but only happens for individual mode results.
+		var profiles []Profile
+		db.Find(&profiles)
+		for _, p := range profiles {
+			pseudoID := uuid.NewSHA1(namespace, []byte(fmt.Sprintf("%d", p.UserID)))
+			if pseudoID.String() == teamID {
+				return []uint{p.UserID}
+			}
+		}
+		return nil
+	}
 
 	var team struct {
 		Members []struct {

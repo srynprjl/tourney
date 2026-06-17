@@ -5,15 +5,24 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
+  console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`, config.data);
   const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   
   // Ensure trailing slash for service roots to avoid Nginx redirects
-  const roots = ['/auth', '/tournaments', '/matches', '/team', '/profile'];
-  if (roots.includes(config.url)) {
-    config.url += '/';
+  const roots = ['/auth', '/tournaments', '/matches', '/team', '/profile', '/venue'];
+  const url = config.url.split('?')[0];
+  if (roots.includes(url) || roots.some(root => url === root)) {
+    if (!config.url.includes('?') && !config.url.endsWith('/')) {
+      config.url += '/';
+    } else if (config.url.includes('?')) {
+      const [path, query] = config.url.split('?');
+      if (!path.endsWith('/')) {
+        config.url = `${path}/?${query}`;
+      }
+    }
   }
   
   return config;

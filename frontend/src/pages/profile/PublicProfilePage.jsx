@@ -213,7 +213,9 @@ const PublicProfilePage = () => {
               <span className="opacity-20">//</span>
               <span className="text-primary opacity-100">COMPETITOR</span>
               <span className="opacity-20">//</span>
-              <span className="font-black text-primary">RATING {profile.rating || 1200}</span>
+              <span className="font-black text-primary uppercase tracking-tighter">RATING {profile.rating || 1200}</span>
+              <span className="opacity-20">//</span>
+              <span className="font-black text-primary uppercase tracking-tighter">CREDITS {profile.credits || 0}</span>
             </div>
           </div>
         </div>

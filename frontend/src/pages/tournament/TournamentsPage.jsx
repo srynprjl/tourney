@@ -55,6 +55,7 @@ const TournamentsPage = () => {
     type: "knockout",
     sport: "General",
     mode: "self",
+    participation_mode: "team",
     max_teams: 8,
     is_public: true,
     is_double: false,
@@ -211,25 +212,15 @@ const TournamentsPage = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="rounded-none border shadow-none">
-                        <SelectItem value="knockout" className="text-[10px] font-bold uppercase tracking-widest">Knockout</SelectItem>
+                        <SelectItem value="knockout" className="text-[10px] font-bold uppercase tracking-widest">Single Elimination</SelectItem>
+                        <SelectItem value="double_elimination" className="text-[10px] font-bold uppercase tracking-widest">Double Elimination</SelectItem>
                         <SelectItem value="group" className="text-[10px] font-bold uppercase tracking-widest">Group Stage</SelectItem>
+                        <SelectItem value="swiss" className="text-[10px] font-bold uppercase tracking-widest">Swiss System</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {formData.type === "knockout" ? (
-                    <div className="space-y-3">
-                      <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Max Teams</Label>
-                      <Input
-                        type="number"
-                        className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs"
-                        value={formData.max_teams}
-                        onChange={(e) =>
-                          setFormData({ ...formData, max_teams: e.target.value })
-                        }
-                      />
-                    </div>
-                  ) : (
+                  {formData.type === "group" ? (
                     <>
                       <div className="space-y-3">
                         <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Number of Groups</Label>
@@ -265,7 +256,35 @@ const TournamentsPage = () => {
                         />
                       </div>
                     </>
+                  ) : (
+                    <div className="space-y-3">
+                      <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Max Teams</Label>
+                      <Input
+                        type="number"
+                        className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary transition-colors font-bold tracking-widest text-xs"
+                        value={formData.max_teams}
+                        onChange={(e) =>
+                          setFormData({ ...formData, max_teams: e.target.value })
+                        }
+                      />
+                    </div>
                   )}
+
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Participation Type</Label>
+                    <Select
+                      value={formData.participation_mode}
+                      onValueChange={(v) => setFormData({ ...formData, participation_mode: v })}
+                    >
+                      <SelectTrigger className="h-12 border-x-0 border-t-0 border-b rounded-none px-0 focus:ring-0 focus:border-primary transition-colors font-bold tracking-widest text-xs uppercase">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="team">Team Based</SelectItem>
+                        <SelectItem value="individual">Individuals Only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
                   <div className="flex items-center justify-between py-6 border-b col-span-full">
                     <div className="space-y-1">

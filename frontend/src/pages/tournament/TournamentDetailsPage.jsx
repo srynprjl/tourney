@@ -23,6 +23,10 @@ import {
   Bot,
   Zap,
   Flag,
+  LayoutDashboard,
+  GitBranch,
+  MapPin,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +87,11 @@ const TournamentDetailsPage = () => {
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [myTeams, setMyTeams] = useState([]);
   const [streamUrl, setStreamUrl] = useState("");
+  const [venue, setVenue] = useState(null);
+  const [booking, setBooking] = useState(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
 
   const [editingMatch, setEditingMatch] = useState(null);
   const [editScore1, setEditScore1] = useState(0);
@@ -108,6 +117,9 @@ const TournamentDetailsPage = () => {
     try {
       const res = await api.get(`/tournaments/${id}`);
       setTournament(res.data);
+      if (res.data.venue_id) {
+        fetchVenue(res.data.venue_id);
+      }
       setSettingsData({
         name: res.data.name,
         description: res.data.description || "",
@@ -120,6 +132,56 @@ const TournamentDetailsPage = () => {
       });
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const fetchVenue = async (vid) => {
+    try {
+      const res = await api.get(`/venue/venues/${vid}`);
+      setVenue(res.data);
+      fetchBooking();
+    } catch (err) {
+      console.error("Failed to fetch venue data", err);
+    }
+  };
+
+  const fetchBooking = async () => {
+    try {
+      const res = await api.get(`/venue/tournaments/${id}/booking`);
+      setBooking(res.data);
+    } catch (err) {
+      console.error("No active booking for this sector", err);
+    }
+  };
+
+  const wsBookingMessage = useWebSocket(booking?.id);
+
+  useEffect(() => {
+    if (wsBookingMessage?.type === "VENUE_CHAT") {
+      setChatMessages((prev) => [...prev, wsBookingMessage.data]);
+    }
+  }, [wsBookingMessage]);
+
+  const fetchChat = async () => {
+    if (!booking) return;
+    try {
+      const res = await api.get(`/venue/bookings/${booking.id}/chat`);
+      setChatMessages(res.data || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !booking) return;
+    try {
+      await api.post(`/venue/bookings/${booking.id}/chat`, {
+        content: newMessage,
+      });
+      setNewMessage("");
+    } catch (err) {
+      alert("Transmission failed");
     }
   };
 
@@ -251,6 +313,19 @@ const TournamentDetailsPage = () => {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (tournament.participation_mode === "individual") {
+      try {
+        await api.post(`/tournaments/${id}/register`, {
+          join_code: joinCode,
+        });
+        setRegisterModalOpen(false);
+        fetchTournament();
+      } catch (err) {
+        alert(err.response?.data?.error || "Registration failed");
+      }
+      return;
+    }
+
     const team = myTeams.find((t) => t.id === selectedTeamId);
     if (!team) return;
     try {
@@ -340,6 +415,16 @@ const TournamentDetailsPage = () => {
     }
   };
 
+  const nextSwissRound = async () => {
+    try {
+      await api.post(`/tournaments/${id}/swiss/next`);
+      fetchTournament();
+      fetchStandings();
+    } catch (err) {
+      alert(err.response?.data?.error || "Failed to generate next round");
+    }
+  };
+
   const generate = async () => {
     try {
       await api.post(`/tournaments/${id}/generate`);
@@ -349,6 +434,7 @@ const TournamentDetailsPage = () => {
       alert("Generation failed");
     }
   };
+
 
   const handleDeleteTournament = async () => {
     if (!window.confirm("ARE YOU ABSOLUTELY SURE?")) return;
@@ -383,7 +469,22 @@ const TournamentDetailsPage = () => {
 
   const groupedMatches =
     tournament.matches?.reduce((acc, match) => {
-      const stageKey = match.stage === 1 ? "Knockout" : "Group Phase";
+      let stageKey = "Group Phase";
+      if (tournament.type === "knockout") {
+        stageKey = "Knockout";
+      } else if (tournament.type === "double_elimination") {
+        if (match.stage === 1) stageKey = "Winners Bracket";
+        else if (match.stage === 2) stageKey = "Losers Bracket";
+        else if (match.stage === 3) stageKey = "Grand Final";
+        else stageKey = "Winners Bracket"; // Fallback for DE
+      } else if (tournament.type === "swiss") {
+        stageKey = "Swiss Rounds";
+      } else {
+        // Group stage or transition
+        if (match.stage === 1) stageKey = "Knockout";
+        else stageKey = "Group Phase";
+      }
+
       if (!acc[stageKey]) acc[stageKey] = {};
       const round = match.round || 1;
       if (!acc[stageKey][round]) acc[stageKey][round] = [];
@@ -392,8 +493,9 @@ const TournamentDetailsPage = () => {
     }, {}) || {};
 
   const getRoundName = (round, stage, totalRoundsInStage) => {
-    if (stage === "Group Phase") return `Matchday ${round}`;
-    if (round === totalRoundsInStage) return "Grand Final";
+    if (stage === "Group Phase" || stage === "Swiss Rounds") return `Round ${round}`;
+    if (stage === "Grand Final") return "Championship Match";
+    if (round === totalRoundsInStage) return "Final";
     if (round === totalRoundsInStage - 1) return "Semifinals";
     if (round === totalRoundsInStage - 2) return "Quarterfinals";
     return `Round ${round}`;
@@ -408,14 +510,21 @@ const TournamentDetailsPage = () => {
 
   const tabs = [
     { id: "matches", label: "Matches", icon: Calendar },
+    { id: "bracket", label: "Bracket", icon: GitBranch },
     { id: "standings", label: "Matrix", icon: Trophy },
+    { id: "arena", label: "Arena", icon: MapPin },
     { id: "teams", label: "Squads", icon: Users },
     { id: "news", label: "Comms", icon: Newspaper },
     { id: "info", label: "Intel", icon: ScrollText },
     { id: "live", label: "Stream", icon: Tv },
     { id: "settings", label: "Settings", icon: Settings },
   ].filter((tab) => {
-    if (tab.id === "standings" && tournament?.type === "knockout") return false;
+    if (
+      tab.id === "standings" &&
+      (tournament?.type === "knockout" ||
+        tournament?.type === "double_elimination")
+    )
+      return false;
     if (tab.id === "settings" && !isOwner) return false;
     return true;
   });
@@ -482,9 +591,14 @@ const TournamentDetailsPage = () => {
                 `(Top ${tournament.promote_count} advance)`}
             </span>
             <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+            <span className="capitalize">
+              {tournament.participation_mode === "individual" ? "Individuals Only" : "Team Based"}
+            </span>
+            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
             <span className="font-mono text-xs opacity-70">
               ID: {String(tournament.id || "").split("-")[0]}
             </span>
+
           </div>
           {tournament.description && (
             <p className="text-sm text-muted-foreground max-w-2xl italic">
@@ -510,6 +624,15 @@ const TournamentDetailsPage = () => {
                 className="font-semibold"
               >
                 Promote Units
+              </Button>
+            )}
+            {tournament.type === "swiss" && tournament.matches?.length > 0 && (
+              <Button
+                onClick={nextSwissRound}
+                variant="outline"
+                className="font-semibold"
+              >
+                Next Round
               </Button>
             )}
             <Button onClick={generate} className="font-semibold">
@@ -564,7 +687,17 @@ const TournamentDetailsPage = () => {
               </div>
             ) : (
               Object.keys(groupedMatches)
-                .reverse()
+                .sort((a, b) => {
+                  const order = {
+                    "Grand Final": 0,
+                    "Winners Bracket": 1,
+                    "Knockout": 2,
+                    "Losers Bracket": 3,
+                    "Swiss Rounds": 4,
+                    "Group Phase": 5,
+                  };
+                  return (order[a] ?? 99) - (order[b] ?? 99);
+                })
                 .map((stage) => (
                   <div key={stage} className="space-y-10">
                     <div className="flex items-center justify-between gap-4">
@@ -608,12 +741,13 @@ const TournamentDetailsPage = () => {
                                   variant="ghost"
                                   size="sm"
                                   className="h-7 text-[9px] font-black uppercase tracking-[0.2em] gap-1.5 opacity-40 hover:opacity-100 hover:text-primary transition-all"
-                                  onClick={() =>
-                                    handleBulkSimulate(
-                                      stage === "Knockout" ? 1 : 0,
-                                      round,
-                                    )
-                                  }
+                                  onClick={() => {
+                                    let sNum = 0;
+                                    if (stage === "Winners Bracket" || stage === "Knockout") sNum = 1;
+                                    else if (stage === "Losers Bracket") sNum = 2;
+                                    else if (stage === "Grand Final") sNum = 3;
+                                    handleBulkSimulate(sNum, round);
+                                  }}
                                 >
                                   <Bot size={10} /> Auto-play Matchday
                                 </Button>
@@ -738,65 +872,176 @@ const TournamentDetailsPage = () => {
                   </div>
                 ))
             )}
+          </div>
+        )}
 
-            <Dialog open={scoreModalOpen} onOpenChange={setScoreModalOpen}>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Update Match Result</DialogTitle>
-                  <DialogDescription>
-                    Override the current match scores manually.
-                  </DialogDescription>
-                </DialogHeader>
-                {editingMatch && (
-                  <form onSubmit={handleUpdateScore} className="space-y-8 pt-4">
-                    <div className="grid grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label className="text-center block text-xs uppercase tracking-wider text-muted-foreground">
-                          Team 1
-                        </Label>
-                        <Input
-                          type="number"
-                          className="h-14 text-2xl text-center font-bold"
-                          value={editScore1}
-                          onChange={(e) => setEditScore1(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-center block text-xs uppercase tracking-wider text-muted-foreground">
-                          Team 2
-                        </Label>
-                        <Input
-                          type="number"
-                          className="h-14 text-2xl text-center font-bold"
-                          value={editScore2}
-                          onChange={(e) => setEditScore2(e.target.value)}
-                          required
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button type="submit" className="w-full">
-                        Finalize Scores
-                      </Button>
-                    </DialogFooter>
-                  </form>
+        {activeTab === "bracket" && (
+          <div className="space-y-24 overflow-x-auto pb-12 no-scrollbar scroll-smooth">
+            {Object.keys(groupedMatches)
+              .filter(
+                (s) =>
+                  s !== "Group Phase" &&
+                  s !== "Swiss Rounds" &&
+                  groupedMatches[s],
+              )
+              .sort((a, b) => {
+                const order = {
+                  "Winners Bracket": 0,
+                  Knockout: 1,
+                  "Losers Bracket": 2,
+                  "Grand Final": 3,
+                };
+                return (order[a] ?? 99) - (order[b] ?? 99);
+              })
+              .map((stage) => (
+                <div key={stage} className="space-y-12 min-w-max">
+                  <div className="flex items-center gap-6 px-4">
+                    <div className="w-2 h-8 bg-primary" />
+                    <h3 className="text-xl font-black uppercase tracking-[0.4em] italic">
+                      {stage}
+                    </h3>
+                    <div className="h-px flex-1 bg-border/40" />
+                  </div>
+                  <div className="flex gap-16 px-4">
+                    {Object.keys(groupedMatches[stage])
+                      .sort((a, b) => parseInt(a) - parseInt(b))
+                      .map((round) => (
+                        <div key={round} className="w-72 flex flex-col">
+                          <div className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/40 mb-10 pl-2">
+                            {getRoundName(
+                              parseInt(round),
+                              stage,
+                              Object.keys(groupedMatches[stage]).length,
+                            )}
+                          </div>
+                          <div className="flex-1 flex flex-col justify-around gap-8">
+                            {groupedMatches[stage][round].map((match) => {
+                              const t1 = tournament.teams.find(
+                                (t) => t.squad_id === match.team1_id,
+                              );
+                              const t2 = tournament.teams.find(
+                                (t) => t.squad_id === match.team2_id,
+                              );
+                              return (
+                                <div
+                                  key={match.id}
+                                  className="group relative cursor-pointer"
+                                  onClick={() => {
+                                    if (isOwner) {
+                                      setEditingMatch(match);
+                                      setEditScore1(match.team1_score);
+                                      setEditScore2(match.team2_score);
+                                      setScoreModalOpen(true);
+                                    }
+                                  }}
+                                >
+                                  <div className="border-l-4 border-l-muted border-t border-r border-b bg-muted/10 group-hover:border-primary/40 group-hover:bg-muted/30 transition-all divide-y divide-border/40">
+                                    <div
+                                      className={cn(
+                                        "h-12 px-4 flex items-center justify-between text-[11px] font-bold uppercase tracking-tight",
+                                        match.winner_id === match.team1_id
+                                          ? "text-primary bg-primary/5"
+                                          : "text-foreground/70",
+                                        !match.team1_id && "opacity-30",
+                                      )}
+                                    >
+                                      <span className="truncate pr-4">
+                                        {t1?.name ||
+                                          (match.team1_id ===
+                                          "00000000-0000-0000-0000-000000000000"
+                                            ? "BYE"
+                                            : "TBD")}
+                                      </span>
+                                      <span className="font-mono text-xs">
+                                        {match.is_played
+                                          ? match.team1_score
+                                          : "-"}
+                                      </span>
+                                    </div>
+                                    <div
+                                      className={cn(
+                                        "h-12 px-4 flex items-center justify-between text-[11px] font-bold uppercase tracking-tight",
+                                        match.winner_id === match.team2_id
+                                          ? "text-primary bg-primary/5"
+                                          : "text-foreground/70",
+                                        !match.team2_id && "opacity-30",
+                                      )}
+                                    >
+                                      <span className="truncate pr-4">
+                                        {t2?.name ||
+                                          (match.team2_id ===
+                                          "00000000-0000-0000-0000-000000000000"
+                                            ? "BYE"
+                                            : "TBD")}
+                                      </span>
+                                      <span className="font-mono text-xs">
+                                        {match.is_played
+                                          ? match.team2_score
+                                          : "-"}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {match.is_played && (
+                                    <div className="absolute -left-2 -top-2 w-4 h-4 bg-primary text-primary-foreground flex items-center justify-center rounded-full shadow-lg">
+                                      <Flag size={8} fill="currentColor" />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              ))}
+
+            {Object.keys(groupedMatches).filter(
+              (s) => s !== "Group Phase" && s !== "Swiss Rounds",
+            ).length === 0 && (
+              <div className="py-32 text-center border-2 border-dashed rounded-3xl bg-muted/10 max-w-2xl mx-auto space-y-8">
+                <div className="relative inline-block">
+                  <Activity
+                    size={64}
+                    className="mx-auto text-muted-foreground/20 animate-pulse"
+                  />
+                  <Trophy
+                    size={24}
+                    className="absolute -bottom-2 -right-2 text-primary opacity-40"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <h3 className="text-xl font-black uppercase tracking-[0.4em] text-muted-foreground/80">
+                    Tactical Matrix Offline
+                  </h3>
+                  <p className="text-xs font-bold text-muted-foreground/40 uppercase tracking-widest max-w-xs mx-auto leading-relaxed">
+                    No visual bracket data found. Complete the initialization
+                    sequence to map the arena.
+                  </p>
+                </div>
+                {isOwner && (
+                  <Button
+                    onClick={generate}
+                    className="font-black uppercase tracking-[0.2em] text-[10px] h-12 px-8"
+                  >
+                    Initiate Sequence
+                  </Button>
                 )}
-              </DialogContent>
-            </Dialog>
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === "standings" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {Object.keys(groupedStandings)
               .sort()
               .map((groupName) => (
                 <Card
                   key={groupName}
-                  className="overflow-hidden border-muted/60"
+                  className="overflow-hidden border-muted/60 bg-background/50 backdrop-blur-sm"
                 >
-                  <CardHeader className="bg-muted/50 pb-4">
+                  <CardHeader className="bg-muted/50 pb-4 border-b">
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Trophy size={18} className="text-primary" />
                       {groupName === "Overall"
@@ -816,7 +1061,7 @@ const TournamentDetailsPage = () => {
                           <TableHead className="text-center px-1">GF</TableHead>
                           <TableHead className="text-center px-1">GA</TableHead>
                           <TableHead className="text-center px-1">GD</TableHead>
-                          <TableHead className="text-center px-1">
+                          <TableHead className="text-center px-1 font-black text-primary">
                             Pts
                           </TableHead>
                           <TableHead className="text-right pl-4">
@@ -850,9 +1095,9 @@ const TournamentDetailsPage = () => {
                                 {idx < tournament.promote_count && (
                                   <Badge
                                     variant="outline"
-                                    className="ml-2 py-0 h-4 text-[8px] border-primary/30 text-primary"
+                                    className="ml-2 py-0 h-4 text-[8px] border-primary/30 text-primary uppercase font-black"
                                   >
-                                    Qualifying
+                                    QUALIFYING
                                   </Badge>
                                 )}
                               </TableCell>
@@ -886,7 +1131,7 @@ const TournamentDetailsPage = () => {
                               >
                                 {s.gd > 0 ? `+${s.gd}` : s.gd}
                               </TableCell>
-                              <TableCell className="text-center font-black text-sm px-1">
+                              <TableCell className="text-center font-black text-sm px-1 text-primary">
                                 {s.points}
                               </TableCell>
                               <TableCell className="text-right pl-4">
@@ -911,6 +1156,120 @@ const TournamentDetailsPage = () => {
                   </div>
                 </Card>
               ))}
+          </div>
+        )}
+
+        {activeTab === "arena" && (
+          <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {!venue ? (
+              <div className="py-32 text-center border-2 border-dashed rounded-3xl bg-muted/10 space-y-8">
+                <MapPin
+                  size={48}
+                  className="mx-auto text-muted-foreground/20 animate-bounce"
+                />
+                <div className="space-y-3">
+                  <h3 className="text-xl font-black uppercase tracking-[0.4em] text-muted-foreground/80">
+                    Tactical Matrix Offline
+                  </h3>
+                  <p className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest max-w-xs mx-auto leading-relaxed">
+                    This tournament has not been linked to a physical command center yet.
+                  </p>
+                </div>
+                {isOwner && (
+                  <Button
+                    asChild
+                    className="font-black uppercase tracking-[0.2em] text-[10px] h-12 px-8"
+                  >
+                    <Link to="/venues">Browse Available Arenas</Link>
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-10">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  <div className="md:col-span-2 space-y-8">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3 opacity-40">
+                        <Badge variant="outline" className="rounded-none font-black text-[8px] tracking-[0.3em] uppercase">
+                          OFFICIAL VENUE
+                        </Badge>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em]">
+                          {venue.address}
+                        </span>
+                      </div>
+                      <h2 className="text-5xl font-black uppercase tracking-tighter italic">
+                        {venue.name}
+                      </h2>
+                      <p className="text-sm text-muted-foreground leading-relaxed italic border-l-4 pl-6 py-2">
+                        {venue.description || "Sector data restricted. Information available upon deployment."}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="p-6 border bg-muted/5 space-y-1">
+                            <span className="text-[8px] font-black uppercase tracking-[0.3em] opacity-40 text-primary">Capacity</span>
+                            <div className="text-2xl font-bold tracking-tighter uppercase">{venue.capacity} Operatives</div>
+                        </div>
+                        <div className="p-6 border bg-muted/5 space-y-1">
+                            <span className="text-[8px] font-black uppercase tracking-[0.3em] opacity-40 text-primary">Daily Rate</span>
+                            <div className="text-2xl font-bold tracking-tighter uppercase">${venue.daily_rate} Credits</div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-6">
+                        <h4 className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Tactical Amenities</h4>
+                        <div className="flex flex-wrap gap-3">
+                            {(venue.amenities || "").split(",").map(a => (
+                                <Badge key={a} variant="outline" className="rounded-none px-4 py-2 border-2 font-bold uppercase tracking-widest text-[9px]">
+                                    {a.trim()}
+                                </Badge>
+                            ))}
+                        </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="aspect-square bg-muted border-4 border-foreground relative overflow-hidden group">
+                        <div className="absolute inset-0 flex items-center justify-center opacity-20 group-hover:opacity-40 transition-opacity">
+                            <MapPin size={80} />
+                        </div>
+                        <div className="absolute bottom-6 left-6 right-6">
+                             <Button asChild className="w-full h-14 font-black uppercase tracking-widest text-xs italic shadow-2xl">
+                                <a
+                                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.address)}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                >
+                                    OPEN MAP LINK
+                                </a>
+                             </Button>
+                        </div>
+                    </div>
+                    
+                    <div className="p-6 border-2 border-primary/20 bg-primary/5 space-y-4">
+                        <div className="flex items-center gap-3">
+                            <MessageSquare size={16} className="text-primary" />
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em]">Private Comms</span>
+                        </div>
+                        <p className="text-[9px] font-bold uppercase leading-relaxed opacity-60">
+                            Direct encrypted channel to the arena owner for final tactical planning.
+                        </p>
+                        <Button 
+                            variant="outline" 
+                            className="w-full font-black uppercase tracking-widest text-[9px] h-10 border-primary/30 hover:bg-primary hover:text-primary-foreground"
+                            onClick={() => {
+                                fetchChat();
+                                setChatOpen(true);
+                            }}
+                            disabled={!booking}
+                        >
+                            {booking ? "Initiate Negotiation" : "Awaiting Authorization"}
+                        </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -967,44 +1326,53 @@ const TournamentDetailsPage = () => {
                     open={registerModalOpen}
                     onOpenChange={(v) => {
                       setRegisterModalOpen(v);
-                      if (v) fetchMyTeams();
+                      if (v && tournament.participation_mode !== "individual") fetchMyTeams();
                     }}
                   >
                     <DialogTrigger asChild>
                       <Button size="sm" className="gap-2">
-                        <UserPlus size={16} /> Register My Unit
+                        <UserPlus size={16} /> {tournament.participation_mode === "individual" ? "Join Arena" : "Register My Unit"}
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-md">
                       <DialogHeader>
                         <DialogTitle>Arena Registration</DialogTitle>
                         <DialogDescription>
-                          Select one of your squads to enlist in this arena.
+                          {tournament.participation_mode === "individual" 
+                            ? "Induct yourself into this arena as an independent operative."
+                            : "Select one of your squads to enlist in this arena."}
                         </DialogDescription>
                       </DialogHeader>
                       <form
                         onSubmit={handleRegister}
                         className="space-y-6 pt-4"
                       >
-                        <div className="space-y-2">
-                          <Label>Select Squad</Label>
-                          <div className="grid gap-2 max-h-[200px] overflow-y-auto p-1">
-                            {myTeams.map((t) => (
-                              <div
-                                key={t.id}
-                                onClick={() => setSelectedTeamId(t.id)}
-                                className={cn(
-                                  "p-3 rounded-lg border-2 cursor-pointer text-sm font-semibold transition-all",
-                                  selectedTeamId === t.id
-                                    ? "bg-primary/5 border-primary text-primary"
-                                    : "hover:bg-muted border-transparent",
-                                )}
-                              >
-                                {t.name}
-                              </div>
-                            ))}
+                        {tournament.participation_mode !== "individual" && (
+                          <div className="space-y-2">
+                            <Label>Select Squad</Label>
+                            <div className="grid gap-2 max-h-[200px] overflow-y-auto p-1">
+                              {myTeams.map((t) => (
+                                <div
+                                  key={t.id}
+                                  onClick={() => setSelectedTeamId(t.id)}
+                                  className={cn(
+                                    "p-3 rounded-lg border-2 cursor-pointer text-sm font-semibold transition-all",
+                                    selectedTeamId === t.id
+                                      ? "bg-primary/5 border-primary text-primary"
+                                      : "hover:bg-muted border-transparent",
+                                  )}
+                                >
+                                  {t.name}
+                                </div>
+                              ))}
+                            </div>
+                            {myTeams.length === 0 && (
+                              <p className="text-xs text-destructive font-bold uppercase tracking-widest py-2">
+                                No squads found. Create a squad first to register.
+                              </p>
+                            )}
                           </div>
-                        </div>
+                        )}
                         {!tournament.is_public && (
                           <div className="space-y-2">
                             <Label>Access Code</Label>
@@ -1019,10 +1387,10 @@ const TournamentDetailsPage = () => {
                         <DialogFooter>
                           <Button
                             type="submit"
-                            className="w-full"
-                            disabled={!selectedTeamId}
+                            className="w-full font-black uppercase tracking-widest text-[10px] h-12"
+                            disabled={tournament.participation_mode !== "individual" && !selectedTeamId}
                           >
-                            Verify & Enlist
+                            {tournament.participation_mode === "individual" ? "Induct Now" : "Verify & Enlist"}
                           </Button>
                         </DialogFooter>
                       </form>
@@ -1580,6 +1948,103 @@ const TournamentDetailsPage = () => {
           </form>
         </DialogContent>
       </Dialog>
+      <Dialog open={chatOpen} onOpenChange={setChatOpen}>
+        <DialogContent className="max-w-lg border-0 rounded-none p-0 flex flex-col h-[600px] overflow-hidden">
+          <DialogHeader className="p-8 border-b bg-muted/30">
+            <DialogTitle className="text-2xl font-bold uppercase tracking-tighter">
+              Arena Command Link
+            </DialogTitle>
+            <DialogDescription className="text-[9px] font-black uppercase tracking-widest opacity-40">
+              Direct line to {venue?.name} owner regarding deployment {String(booking?.id).split("-")[0]}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-8 space-y-6 scroll-smooth">
+            {chatMessages.map((msg, i) => {
+              const isMe = msg.user_id === currentUser?.user_id;
+              return (
+                <div key={i} className={cn("flex flex-col", isMe ? "items-end" : "items-start")}>
+                  <span className="text-[8px] font-black uppercase tracking-widest opacity-30 mb-2">
+                    {msg.username} // {new Date(msg.created_at).toLocaleTimeString()}
+                  </span>
+                  <div className={cn(
+                    "px-6 py-4 text-xs font-bold uppercase tracking-tight max-w-[80%] border-2",
+                    isMe ? "bg-primary text-primary-foreground border-primary" : "bg-muted/10 border-muted"
+                  )}>
+                    {msg.content}
+                  </div>
+                </div>
+              )
+            })}
+            {chatMessages.length === 0 && (
+              <div className="h-full flex items-center justify-center opacity-20 uppercase font-black text-[10px] tracking-[0.5em] italic">
+                Awaiting initial transmission...
+              </div>
+            )}
+          </div>
+
+          <form onSubmit={handleSendMessage} className="p-6 border-t bg-background flex gap-4">
+            <Input 
+              className="h-12 border-2 rounded-none focus-visible:ring-0 focus-visible:border-primary font-bold uppercase text-[10px] tracking-widest"
+              placeholder="Type transmission..."
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+            />
+            <Button type="submit" className="h-12 px-8 font-black uppercase tracking-widest text-[10px] italic">
+              Send
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={scoreModalOpen} onOpenChange={setScoreModalOpen}>
+        <DialogContent className="max-w-md border-0 rounded-none p-10">
+          <DialogHeader className="space-y-6">
+            <DialogTitle className="text-3xl font-bold uppercase tracking-tighter">
+              Verify Match Data
+            </DialogTitle>
+            <DialogDescription className="text-[10px] font-bold uppercase tracking-widest opacity-60">
+              Override tactical result for match {String(editingMatch?.id).split("-")[0]}
+            </DialogDescription>
+          </DialogHeader>
+          {editingMatch && (
+            <form onSubmit={handleUpdateScore} className="space-y-8 pt-8">
+              <div className="grid grid-cols-2 gap-8">
+                <div className="space-y-3">
+                  <Label className="text-center block text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+                    {tournament.teams.find(t => t.squad_id === editingMatch.team1_id)?.name || "Team 1"}
+                  </Label>
+                  <Input
+                    type="number"
+                    className="h-14 text-2xl text-center font-bold border-0 border-b rounded-none focus-visible:ring-0 focus-visible:border-primary transition-colors"
+                    value={editScore1}
+                    onChange={(e) => setEditScore1(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-3">
+                  <Label className="text-center block text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+                    {tournament.teams.find(t => t.squad_id === editingMatch.team2_id)?.name || "Team 2"}
+                  </Label>
+                  <Input
+                    type="number"
+                    className="h-14 text-2xl text-center font-bold border-0 border-b rounded-none focus-visible:ring-0 focus-visible:border-primary transition-colors"
+                    value={editScore2}
+                    onChange={(e) => setEditScore2(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <DialogFooter className="pt-8">
+                <Button type="submit" className="w-full h-14 font-black uppercase tracking-widest text-xs italic">
+                  Verify & Commit Score
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={reportModalOpen} onOpenChange={setReportModalOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>

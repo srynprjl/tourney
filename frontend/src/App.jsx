@@ -15,6 +15,7 @@ import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
 import TeamsListPage from '@/pages/team/TeamsListPage';
 import TeamDashboardPage from '@/pages/team/TeamDashboardPage';
 import PublicProfilePage from '@/pages/profile/PublicProfilePage';
+import VenuesPage from '@/pages/venue/VenuesPage';
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
               <Route path="/teams" element={<TeamsListPage />} />
               <Route path="/team/:id" element={<TeamDashboardPage />} />
               <Route path="/player/:username" element={<PublicProfilePage />} />
+              <Route path="/venues" element={<VenuesPage />} />
             </Routes>
           </MainLayout>
         </Router>
