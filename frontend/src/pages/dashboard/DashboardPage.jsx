@@ -143,7 +143,7 @@ const DashboardPage = () => {
                 <div key={activity.id} className="flex items-center justify-between py-4 hover:bg-accent/30 transition-colors group">
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold uppercase tracking-widest">{activity.name}</p>
-                    <p className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.3em]">{activity.sport}</p>
+                    <p className="text-[8px] font-black text-muted-foreground uppercase tracking-[0.3em]">{activity.type} Arena</p>
                   </div>
                   <span className="text-[8px] font-black uppercase tracking-[0.3em] border px-2 py-1">LIVE</span>
                 </div>

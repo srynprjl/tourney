@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
 import {
   Trophy,
   LogOut,
@@ -9,17 +9,29 @@ import {
   ShieldCheck,
   Users,
   Award,
+  Activity,
+  MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 const Sidebar = () => {
   const { darkMode, setDarkMode } = useTheme();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [feed, setFeed] = useState([]);
+
+  const lastMessage = useWebSocket("global");
+
+  useEffect(() => {
+    if (lastMessage?.type === "GLOBAL_FEED") {
+      setFeed((prev) => [lastMessage.data, ...prev].slice(0, 5));
+    }
+  }, [lastMessage]);
 
   const handleLogout = () => {
     logout();
@@ -29,11 +41,16 @@ const Sidebar = () => {
   const navItems = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { name: "Arenas", path: "/tournaments", icon: Trophy },
+    { name: "Command", path: "/venues", icon: MapPin },
     { name: "Squads", path: "/teams", icon: Users },
   ];
 
   if (user) {
-    navItems.push({ name: "Profile", path: `/player/${user.username}`, icon: Award });
+    navItems.push({
+      name: "Profile",
+      path: `/player/${user.username}`,
+      icon: Award,
+    });
   }
 
   if (user?.is_admin) {
@@ -41,13 +58,13 @@ const Sidebar = () => {
   }
 
   return (
-    <aside
-      className="bg-background border-r w-64 flex flex-col fixed h-full z-50"
-    >
+    <aside className="bg-background border-r w-64 flex flex-col fixed h-full z-50">
       <div className="p-8 flex items-center justify-between">
         <Link to="/dashboard" className="flex items-center gap-2">
           <Trophy className="w-5 h-5" strokeWidth={2.5} />
-          <span className="font-bold text-lg tracking-tighter uppercase">TourneyPro</span>
+          <span className="font-bold text-lg tracking-tighter uppercase">
+            TourneyPro
+          </span>
         </Link>
       </div>
 
@@ -66,6 +83,30 @@ const Sidebar = () => {
             <span>{item.name}</span>
           </Link>
         ))}
+
+        <div className="mt-12 space-y-4 px-4">
+          <div className="flex items-center gap-2 opacity-30">
+            <Activity size={10} />
+            <span className="text-[8px] font-black uppercase tracking-[0.3em]">
+              System Live Feed
+            </span>
+          </div>
+          <div className="space-y-3">
+            {feed.map((msg, i) => (
+              <div
+                key={i}
+                className="text-[9px] font-bold uppercase tracking-wider leading-relaxed border-l border-primary/20 pl-3 py-1 opacity-70 animate-in fade-in slide-in-from-left-2 duration-500"
+              >
+                {msg}
+              </div>
+            ))}
+            {feed.length === 0 && (
+              <p className="text-[8px] italic opacity-20 uppercase tracking-widest">
+                Awaiting transmission...
+              </p>
+            )}
+          </div>
+        </div>
       </nav>
 
       <div className="p-4 space-y-0.5">

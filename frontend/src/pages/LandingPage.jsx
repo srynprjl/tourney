@@ -63,7 +63,7 @@ const LandingPage = () => {
               Tournament<br />Management.
             </h1>
             <p className="text-xl text-muted-foreground mb-16 leading-tight max-w-xl font-medium">
-              Create, manage, and scale your football tournaments with professional-grade tools. Built for organizers, loved by players.
+              Create, manage, and scale your competitive tournaments with professional-grade tools. Built for organizers, loved by players.
             </p>
             <div className="flex flex-wrap gap-6">
               <Link to={user ? "/dashboard" : "/register"}>
@@ -121,7 +121,7 @@ const LandingPage = () => {
           <div className="flex flex-col md:flex-row items-end justify-between mb-24 gap-8">
             <div className="max-w-xl">
               <h2 className="text-4xl font-bold mb-6 tracking-tighter uppercase">Active Arenas</h2>
-              <p className="text-muted-foreground uppercase text-xs font-bold tracking-[0.2em]">Join one of our active football leagues and prove your skill on the global stage.</p>
+              <p className="text-muted-foreground uppercase text-xs font-bold tracking-[0.2em]">Join one of our active competitive leagues and prove your skill on the global stage.</p>
             </div>
             <Link to="/tournaments">
               <Button variant="outline" className="px-10 font-bold uppercase tracking-widest">

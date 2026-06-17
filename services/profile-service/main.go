@@ -1,12 +1,26 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -18,6 +32,8 @@ type Profile struct {
 	Bio       string    `json:"bio"`
 	AvatarURL string    `json:"avatar_url"`
 	Location  string    `json:"location"`
+	Rating    int       `gorm:"default:1200" json:"rating"`
+	Credits   float64   `gorm:"default:0" json:"credits"`
 	Public    bool      `gorm:"default:true" json:"public"`
 	Awards    []Award   `gorm:"constraint:OnDelete:CASCADE;" json:"awards"`
 	Comments  []Comment `gorm:"constraint:OnDelete:CASCADE;" json:"comments"`
@@ -54,6 +70,7 @@ type UserHistory struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
 	UserID       uint      `gorm:"index" json:"user_id"`
 	TournamentID string    `json:"tournament_id"`
+	MatchID      string    `gorm:"index" json:"match_id"`
 	TeamID       string    `json:"team_id"`
 	Result       string    `json:"result"` // "winner", "runner_up", "participant"
 	Date         time.Time `json:"date"`
@@ -68,7 +85,35 @@ type Report struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-var db *gorm.DB
+var (
+	db        *gorm.DB
+	rdb       *redis.Client
+	sqsClient *sqs.Client
+	queueURL  string
+	ctx       = context.Background()
+	logger    *slog.Logger
+)
+
+const (
+	taskQueue = "profile_tasks"
+)
+
+func setupLogger() {
+	if err := os.MkdirAll("logs", 0755); err != nil {
+		log.Fatalf("failed to create log directory: %v", err)
+	}
+
+	logFile, err := os.OpenFile("logs/profile-service.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("failed to open log file: %v", err)
+	}
+
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+	logger = slog.New(slog.NewJSONHandler(multiWriter, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+}
 
 func initDB() {
 	dbURL := os.Getenv("DB_URL")
@@ -78,17 +123,398 @@ func initDB() {
 	var err error
 	for i := 0; i < 10; i++ {
 		db, err = gorm.Open(postgres.Open(dbURL), &gorm.Config{})
-		if err == nil { break }
+		if err == nil {
+			break
+		}
+		logger.Warn("Failed to connect to profile database", "attempt", i+1, "error", err)
 		time.Sleep(2 * time.Second)
+	}
+	if err != nil {
+		logger.Error("Could not connect to profile database after retries", "error", err)
+		os.Exit(1)
 	}
 	db.AutoMigrate(&Profile{}, &UserHistory{}, &Report{}, &Award{}, &Comment{}, &CommentLike{})
 }
 
-func main() {
-	initDB()
-	r := gin.Default()
+func initRedis() {
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		redisURL = "localhost:6379"
+	}
+	rdb = redis.NewClient(&redis.Options{
+		Addr: redisURL,
+	})
 
-	r.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "healthy"}) })
+	// Test connection
+	for i := 0; i < 5; i++ {
+		err := rdb.Ping(ctx).Err()
+		if err == nil {
+			logger.Info("Connected to Redis")
+			return
+		}
+		logger.Warn("Failed to connect to Redis", "attempt", i+1, "error", err)
+		time.Sleep(2 * time.Second)
+	}
+}
+
+func initSQS() {
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		region = "us-east-1"
+	}
+	endpoint := os.Getenv("SQS_ENDPOINT")
+	accessKey := os.Getenv("AWS_ACCESS_KEY_ID")
+	secretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
+
+	cfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(region),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
+	)
+	if err != nil {
+		logger.Error("Unable to load AWS SDK config", "error", err)
+		os.Exit(1)
+	}
+
+	sqsClient = sqs.NewFromConfig(cfg, func(o *sqs.Options) {
+		if endpoint != "" {
+			o.BaseEndpoint = aws.String(endpoint)
+		}
+	})
+
+	for i := 0; i < 30; i++ {
+		// Auto-create queue if it doesn't exist
+		out, cerr := sqsClient.CreateQueue(ctx, &sqs.CreateQueueInput{
+			QueueName: aws.String(taskQueue),
+		})
+		if cerr == nil {
+			queueURL = *out.QueueUrl
+			logger.Info("SQS initialized", "queue_url", queueURL)
+			return
+		}
+
+		// If it already exists, get the URL
+		gurl, gerr := sqsClient.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{
+			QueueName: aws.String(taskQueue),
+		})
+		if gerr == nil {
+			queueURL = *gurl.QueueUrl
+			logger.Info("SQS initialized", "queue_url", queueURL)
+			return
+		}
+
+		err = cerr // keep track of the creation error
+		logger.Warn("Failed to connect to SQS or create queue", "attempt", i+1, "error", cerr, "gerr", gerr)
+		time.Sleep(2 * time.Second)
+	}
+
+	if err != nil {
+		logger.Error("Could not initialize SQS after retries", "error", err)
+		os.Exit(1)
+	}
+}
+
+func startTaskWorker() {
+	logger.Info("Starting background task worker (SQS)")
+	for {
+		msgOutput, err := sqsClient.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+			QueueUrl:            aws.String(queueURL),
+			MaxNumberOfMessages: 1,
+			WaitTimeSeconds:     20,
+		})
+		if err != nil {
+			logger.Error("Error receiving message from SQS", "error", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		if len(msgOutput.Messages) == 0 {
+			continue
+		}
+
+		msg := msgOutput.Messages[0]
+		taskData := *msg.Body
+		logger.Info("Processing background task", "task_data", taskData)
+
+		var task struct {
+			Type    string          `json:"type"`
+			Payload json.RawMessage `json:"payload"`
+		}
+		if err := json.Unmarshal([]byte(taskData), &task); err == nil {
+			if task.Type == "MATCH_COMPLETED" {
+				var matchPayload struct {
+					MatchID      string `json:"match_id"`
+					TournamentID string `json:"tournament_id"`
+					Team1ID      string `json:"team1_id"`
+					Team2ID      string `json:"team2_id"`
+					WinnerID     string `json:"winner_id"`
+					Stage        int    `json:"stage"`
+				}
+				if err := json.Unmarshal(task.Payload, &matchPayload); err == nil {
+					processMatchCompleted(matchPayload)
+				} else {
+					logger.Error("Failed to unmarshal match payload", "error", err)
+				}
+			}
+		}
+
+		// Store in completed tasks history in Redis (keep last 50)
+		rdb.LPush(ctx, taskQueue+":completed", taskData)
+		rdb.LTrim(ctx, taskQueue+":completed", 0, 49)
+
+		// Delete message from SQS
+		_, err = sqsClient.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+			QueueUrl:      aws.String(queueURL),
+			ReceiptHandle: msg.ReceiptHandle,
+		})
+		if err != nil {
+			logger.Error("Failed to delete message from SQS", "error", err)
+		}
+
+		logger.Info("Background task completed", "task_data", taskData)
+	}
+}
+
+func processMatchCompleted(data struct {
+	MatchID      string `json:"match_id"`
+	TournamentID string `json:"tournament_id"`
+	Team1ID      string `json:"team1_id"`
+	Team2ID      string `json:"team2_id"`
+	WinnerID     string `json:"winner_id"`
+	Stage        int    `json:"stage"`
+}) {
+	matchID := data.MatchID
+	tournamentID := data.TournamentID
+	team1ID := data.Team1ID
+	team2ID := data.Team2ID
+	winnerID := data.WinnerID
+	stage := data.Stage
+
+	// 1. Fetch team rosters
+	t1Players := fetchTeamRoster(team1ID)
+	t2Players := fetchTeamRoster(team2ID)
+
+	if len(t1Players) == 0 || len(t2Players) == 0 {
+		return
+	}
+
+	// 2. Get current ratings and calculate team averages
+	t1Ratings := getPlayerRatings(t1Players)
+	t2Ratings := getPlayerRatings(t2Players)
+
+	avg1 := calculateAverage(t1Ratings)
+	avg2 := calculateAverage(t2Ratings)
+
+	// 3. Determine result (1 for win, 0.5 for draw, 0 for loss)
+	var s1, s2 float64
+	if winnerID == team1ID {
+		s1, s2 = 1, 0
+	} else if winnerID == team2ID {
+		s1, s2 = 0, 1
+	} else {
+		s1, s2 = 0.5, 0.5
+	}
+
+	// 4. Calculate Expected Scores
+	e1 := 1.0 / (1.0 + math.Pow(10, (avg2-avg1)/400.0))
+	e2 := 1.0 / (1.0 + math.Pow(10, (avg1-avg2)/400.0))
+
+	// 5. Calculate Change (K-factor = 32)
+	k := 32.0
+	diff1 := int(math.Round(k * (s1 - e1)))
+	diff2 := int(math.Round(k * (s2 - e2)))
+
+	// Ensure at least 1 point change for wins/losses
+	if s1 == 1 && diff1 == 0 { diff1 = 1 }
+	if s1 == 0 && diff1 == 0 { diff1 = -1 }
+	if s2 == 1 && diff2 == 0 { diff2 = 1 }
+	if s2 == 0 && diff2 == 0 { diff2 = -1 }
+
+	// 6. Update individual ratings and record history
+	updateRatings(t1Players, diff1, tournamentID, matchID, team1ID, getResultString(s1))
+	updateRatings(t2Players, diff2, tournamentID, matchID, team2ID, getResultString(s2))
+
+	// 7. Award Credits for Grand Finals (Stage 3)
+	if stage == 3 {
+		winnerPlayers := t1Players
+		if s2 == 1 {
+			winnerPlayers = t2Players
+		}
+		if s1 == 1 || s2 == 1 {
+			awardCredits(winnerPlayers, 100.0) // 100 credits for winning a tournament
+			logger.Info("Tournament prizes awarded", "match_id", matchID, "amount", 100.0)
+		}
+	}
+
+	logger.Info("Elo updated for match", "match_id", matchID, "team1_diff", diff1, "team2_diff", diff2)
+}
+
+func awardCredits(userIDs []uint, amount float64) {
+	for _, id := range userIDs {
+		db.Model(&Profile{}).Where("user_id = ?", id).Update("credits", gorm.Expr("credits + ?", amount))
+	}
+}
+
+func fetchTeamRoster(teamID string) []uint {
+	// Check if it's an individual pseudo-team
+	// We use a specific namespace for deterministic UUIDs for individuals
+	namespace := uuid.MustParse("00000000-0000-0000-0000-000000000000")
+	
+	// If it's a pseudo-team, we can't easily "reverse" the SHA1 hash to get the UserID.
+	// Instead, we'll try to find a profile that matches this SquadID if it's an individual tournament.
+	// But wait, it's easier: for individual tournaments, the Team1ID passed in the event IS the pseudo-team ID.
+	
+	// Actually, the most robust way is to query the profile-service's own DB to see if any profile
+	// "pseudo-id" matches. But profiles don't store pseudo-ids.
+	
+	// Better approach: Since we can't reverse the hash, we'll try to look up the team in team-service.
+	// If it's not found (404), AND it looks like it might be an individual mode,
+	// we'll assume the teamID IS a user-related ID.
+	
+	teamURL := os.Getenv("TEAM_SERVICE_URL")
+	if teamURL == "" {
+		teamURL = "http://team-service:8084"
+	}
+
+	resp, err := http.Get(teamURL + "/" + teamID)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		// Possibly an individual. In individual mode, we store the result under the UserID directly.
+		// However, we don't have the UserID.
+		// Let's look at how tournament-service registers individuals.
+		// It uses uuid.NewSHA1(namespace, []byte(fmt.Sprintf("%d", uid)))
+		
+		// If we can't find the team, let's scan our profiles to see if any user's hashed ID matches.
+		// This is slow but only happens for individual mode results.
+		var profiles []Profile
+		db.Find(&profiles)
+		for _, p := range profiles {
+			pseudoID := uuid.NewSHA1(namespace, []byte(fmt.Sprintf("%d", p.UserID)))
+			if pseudoID.String() == teamID {
+				return []uint{p.UserID}
+			}
+		}
+		return nil
+	}
+
+	var team struct {
+		Members []struct {
+			UserID uint `json:"user_id"`
+		} `json:"members"`
+	}
+	json.NewDecoder(resp.Body).Decode(&team)
+
+	var ids []uint
+	for _, m := range team.Members {
+		ids = append(ids, m.UserID)
+	}
+	return ids
+}
+
+func getPlayerRatings(userIDs []uint) map[uint]int {
+	ratings := make(map[uint]int)
+	for _, id := range userIDs {
+		var p Profile
+		if err := db.Where("user_id = ?", id).First(&p).Error; err == nil {
+			ratings[id] = p.Rating
+		} else {
+			ratings[id] = 1200 // default
+		}
+	}
+	return ratings
+}
+
+func calculateAverage(ratings map[uint]int) float64 {
+	if len(ratings) == 0 {
+		return 1200
+	}
+	sum := 0
+	for _, r := range ratings {
+		sum += r
+	}
+	return float64(sum) / float64(len(ratings))
+}
+
+func updateRatings(userIDs []uint, diff int, tID, mID, teamID, result string) {
+	for _, id := range userIDs {
+		// Prevent double processing
+		var existing UserHistory
+		if err := db.Where("user_id = ? AND match_id = ?", id, mID).First(&existing).Error; err == nil {
+			continue
+		}
+
+		db.Model(&Profile{}).Where("user_id = ?", id).Update("rating", gorm.Expr("rating + ?", diff))
+		db.Create(&UserHistory{
+			UserID:       id,
+			TournamentID: tID,
+			MatchID:      mID,
+			TeamID:       teamID,
+			Result:       result,
+			Date:         time.Now(),
+		})
+	}
+}
+
+func getResultString(s float64) string {
+	if s == 1 {
+		return "winner"
+	}
+	if s == 0 {
+		return "participant"
+	}
+	return "draw"
+}
+
+func publishTask(taskType string, payload any) error {
+	data, _ := json.Marshal(map[string]any{
+		"type":    taskType,
+		"payload": payload,
+		"time":    time.Now().Format(time.RFC3339),
+	})
+	_, err := sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
+		QueueUrl:    aws.String(queueURL),
+		MessageBody: aws.String(string(data)),
+	})
+	if err != nil {
+		logger.Error("Failed to publish task to SQS", "error", err)
+		return err
+	}
+	return nil
+}
+
+func main() {
+	setupLogger()
+	initDB()
+	initRedis()
+	initSQS()
+
+	go startTaskWorker()
+
+	r := gin.New()
+	r.Use(gin.Recovery())
+	r.Use(func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
+		c.Next()
+		logger.Info("HTTP Request",
+			"method", c.Request.Method,
+			"path", path,
+			"status", c.Writer.Status(),
+			"duration", time.Since(start).String(),
+			"ip", c.ClientIP(),
+		)
+	})
+
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status": "healthy",
+			"redis":  rdb.Ping(ctx).Err() == nil,
+			"sqs":    sqsClient != nil,
+		})
+	})
 
 	api := r.Group("/")
 	api.Use(authMiddleware())
@@ -103,6 +529,16 @@ func main() {
 		api.DELETE("/comments/:id", deleteComment)
 		api.POST("/comments/:id/like", toggleLikeComment)
 		api.POST("/reports", createReport)
+
+		// Admin only
+		admin := api.Group("/admin")
+		admin.Use(adminOnly())
+		{
+			admin.GET("/logs", getLogs)
+			admin.GET("/mq-stats", getMQStats)
+			admin.GET("/reports", listReports)
+			admin.DELETE("/reports/:id", deleteReport)
+		}
 	}
 
 	port := os.Getenv("PORT")
@@ -135,6 +571,75 @@ func toggleLikeComment(c *gin.Context) {
 	}
 }
 
+func listReports(c *gin.Context) {
+	var reports []Report
+	db.Order("created_at desc").Find(&reports)
+	c.JSON(200, reports)
+}
+
+func deleteReport(c *gin.Context) {
+	id := c.Param("id")
+	db.Delete(&Report{}, id)
+	c.JSON(200, gin.H{"message": "Report resolved/deleted"})
+}
+
+func adminOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		isAdmin, exists := c.Get("is_admin")
+		if !exists || !isAdmin.(bool) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+func getLogs(c *gin.Context) {
+	data, err := os.ReadFile("logs/profile-service.log")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not read log file"})
+		return
+	}
+	lines := bytes.Split(data, []byte("\n"))
+	if len(lines) > 1000 {
+		lines = lines[len(lines)-1000:]
+	}
+	c.Data(http.StatusOK, "text/plain", bytes.Join(lines, []byte("\n")))
+}
+
+func getMQStats(c *gin.Context) {
+	// Get SQS stats
+	attribs, err := sqsClient.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
+		QueueUrl: aws.String(queueURL),
+		AttributeNames: []types.QueueAttributeName{
+			types.QueueAttributeNameApproximateNumberOfMessages,
+			types.QueueAttributeNameApproximateNumberOfMessagesNotVisible,
+		},
+	})
+
+	sqsStats := make(map[string]string)
+	if err == nil {
+		sqsStats = attribs.Attributes
+	}
+
+	queueLen := "0"
+	if val, ok := sqsStats[string(types.QueueAttributeNameApproximateNumberOfMessages)]; ok {
+		queueLen = val
+	}
+
+	// Get last 10 completed tasks from Redis
+	completed, _ := rdb.LRange(ctx, taskQueue+":completed", 0, 9).Result()
+
+	c.JSON(http.StatusOK, gin.H{
+		"queue_name":   taskQueue,
+		"queue_length": queueLen,
+		"sqs_url":      queueURL,
+		"sqs_stats":    sqsStats,
+		"completed":    completed,
+	})
+}
+
 func authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -165,6 +670,7 @@ func authMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
 
 func getProfile(c *gin.Context) {
 	username := c.Param("username")
